@@ -11,7 +11,7 @@ class Person
 public:
     // 构造函数
     Person();
-    Person(const string &name, bool gender, int group,
+    Person(const string &name, bool gender, int group, int grade,
            const string &phone_number, const string &native_place,
            const string &native, const string &dorm, const string &school,
            const string &classname, const string &birthday, bool isWork, bool (&time)[4][5],
@@ -23,6 +23,7 @@ public:
             name = other.name; // 队员姓名
             gender = other.gender; // 性别（0：男，1：女）
             group = other.group; // 所属组别
+            grade = other.grade; // 所属年级
             phone_number = other.phone_number; // 电话号码
             native_place = other.native_place; // 籍贯
             native = other.native; // 民族
@@ -43,7 +44,7 @@ public:
     }
     // 重载 == 运算符，通过姓名和所属组别判定是否为同一人
     bool operator==(const Person& other) const {
-        return (name == other.name) && (group == other.group) && (gender == other.gender) && (phone_number == other.phone_number)
+        return (name == other.name) && (group == other.group) && (grade == other.grade) && (gender == other.gender) && (phone_number == other.phone_number)
                && (native_place == other.native_place)&& (native == other.native)&& (dorm == other.dorm)
             && (school == other.school)&& (classname == other.classname)&& (birthday == other.birthday)&& (isWork == other.isWork)
             && (times == other.times)&& (all_times == other.all_times);
@@ -63,6 +64,9 @@ public:
     // 所属组别
     int getGroup() const;
     void setGroup(int newGroup);
+    // 所属年级
+    int getGrade() const;
+    void setGrade(int newGrade);
     // 可执勤时间数组
     bool getTime(int row, int column) const;
     void setTime(bool newtime[4][5]);// 设置time数组全部的值。
@@ -98,12 +102,15 @@ public:
     string getBirthday() const;
     void setBirthday(const string &newBirthday);
 
+
+
 private:
     // 类成员变量
     // 队员基本信息
     string name; // 队员姓名
     bool gender; // 性别（0：男，1：女）
-    int group; // 所属组别
+    int group; // 所属组别（1~3）
+    int grade; // 所属年级（1~3）
     string phone_number; // 电话号码
     string native_place; // 籍贯
     string native; // 民族
@@ -111,6 +118,8 @@ private:
     string school; // 学院
     string classname; // 专业班级
     string birthday; // 生日信息
+
+
     // 队员执勤所需信息
     bool isWork; // 是否参加执勤标记，用于勾选整组执勤时调用
     bool time[4][5]; // 队员执勤时间安排，对应20个任务时间点是否有时间。一周升降旗十次任务，一次任务两个校区：10*2=20。

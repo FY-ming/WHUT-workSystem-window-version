@@ -153,8 +153,18 @@ void Person::setBirthday(const string &newBirthday)
 {
     birthday = newBirthday;
 }
+
+int Person::getGrade() const
+{
+    return grade;
+}
+
+void Person::setGrade(int newGrade)
+{
+    grade = newGrade;
+}
 // 无参构造函数
-Person::Person() : name(""), gender(false), group(0), phone_number(""), native_place(""),
+Person::Person() : name(""), gender(false), group(0), grade(0), phone_number(""), native_place(""),
     native(""), dorm(""), school(""), classname(""), birthday(""), isWork(true), times(0), all_times(0) {
     for (int i = 0; i < 4; ++i) {
         for (int j = 0; j < 5; ++j) {
@@ -163,9 +173,10 @@ Person::Person() : name(""), gender(false), group(0), phone_number(""), native_p
     }
 }
 // 全参构造
-Person::Person(const string &name, bool gender, int group, const string &phone_number, const string &native_place, const string &native, const string &dorm, const string &school, const string &classname, const string &birthday, bool isWork, bool (&time)[4][5], int times, int all_times) : name(name),
+Person::Person(const string &name, bool gender, int group, int grade, const string &phone_number, const string &native_place, const string &native, const string &dorm, const string &school, const string &classname, const string &birthday, bool isWork, bool (&time)[4][5], int times, int all_times) : name(name),
     gender(gender),
     group(group),
+    grade(grade),
     phone_number(phone_number),
     native_place(native_place),
     native(native),

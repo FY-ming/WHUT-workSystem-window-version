@@ -23,7 +23,7 @@ public:
     Person* findPerson(const Person &person); // 在全队查找指定姓名的队员
     vector<Person>& getGroupMembers(int groupNumber); // 获取指定组的所有队员，返回可修改引用版本
     const vector<Person>& getGroupMembers(int groupNumber) const; // 获取指定组的所有队员，返回常量版本
-
+    bool isEmpty() const; // 检测容器是否为空
 private:
     vector<Person> group[4]; // vector容器数组 分别存放一到四组队员信息
 };

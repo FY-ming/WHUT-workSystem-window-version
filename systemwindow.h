@@ -7,6 +7,10 @@
 #include <QMainWindow>
 #include "dataFunction.h"
 #include "qabstractbutton.h"
+#include <QFutureWatcher>
+#include <QProgressDialog>
+
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class SystemWindow;
@@ -24,12 +28,10 @@ private slots:
     // 值周管理界面槽函数
     // 表格管理
     void onTabulateButtonClicked(); // 排表按钮点击事件
-    void onClearButtonClicked(); // 清空表格按钮点击事件
+    void onClearButtonClicked(); // 撤销操作按钮点击事件
     void onResetButtonClicked(); // 重置队员执勤总次数按钮点击事件
     void onExportButtonClicked(); // 导出表格按钮点击事件
-    // 规则管理
-    void onTotalTimesRuleClicked(); // 总次数规则按钮点击事件
-    void onRadioButtonClicked(); // 交接工作单选按钮点击事件
+
     // 制表警告
     void handleSchedulingWarning(const QString& warningMessage); // 排表过程中发送警告信息的对应处理函数
 
@@ -37,15 +39,18 @@ private slots:
     // 组员管理工具栏
     void onGroupAddButtonClicked(int groupIndex); // 添加组员按钮点击事件
     void onGroupDeleteButtonClicked(int groupIndex); // 删除组员按钮点击事件
+    void clearMemberInfoDisplay(); // 清空信息显示区
     void onGroupIsWorkRadioButtonClicked(int groupIndex); // 全组是否执勤按钮点击事件
     void onListViewItemClicked(const QModelIndex &index, int groupIndex); // 队员标签点击事件
     // 队员基础信息栏
     void onInfoLineEditChanged(); // 队员基础信息文本框修改事件
     void onGroupComboBoxChanged(int newGroupIndex); // 队员组别信息修改事件
+
     // 队员事件安排栏
     void onAttendanceButtonClicked(QAbstractButton *button); // 事件安排表中执勤按钮点击事件
     void onIsWorkPushButtonClicked(); // 总全选/清空按钮点击事件
     void onAllSelectButtonClicked(); // 全选按钮点击事件
+
 private:
     Ui::SystemWindow *ui; // ui界面指针
     SchedulingManager *manager; // 国旗班制表管理器指针
@@ -55,9 +60,18 @@ private:
     QString warningMessages; // 新增成员变量，用于保存警告信息
     QString filename = "./data/data.txt"; // 保存队员信息的文件名
 
+
+    QProgressDialog* exportProgress = nullptr; // 进度对话框
+    QFutureWatcher<void> exportWatcher;
+
+    Flag_group backupGroup; // 全局变量,用于撤销操作
+    QString finalText_excel; // 全局变量，用于导出表格时输出统计的表格信息
+
+
     // 值周管理操作函数
     void updateTableWidget(const SchedulingManager& manager); // 制表操作，点击制表按钮后的辅助函数
     void updateTextEdit(const SchedulingManager& manager); // 制表结果在文本域中更新，点击制表按钮后的辅助函数
+    void processStep(const QString& stepName, QProgressDialog* progress); // 进度对话框辅助显示函数
     // 队员管理操作函数
     void updateListView(int groupIndex); // 更新队员标签界面
     Person* getSelectedPerson(int groupIndex, const QModelIndex &index); // 捕捉被选中的标签是哪个队员，队员标签点击后的辅助函数

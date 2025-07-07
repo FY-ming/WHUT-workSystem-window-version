@@ -35,17 +35,23 @@ signals:
     void schedulingFinished(); // 排表完成后的提示信号
 
 public:
-    // 针对南鉴湖交接规则的枚举成员
-    enum HandoverRule {
-        NoRule, // 不采用交接规则
-        MondayHandoverRule, // 仅周二的南鉴湖升旗采用交接规则
-        AllHandoverRule // 全周（周二至周五）南鉴湖升旗采用交接规则
+    // 新增的排表模式枚举
+    enum class ScheduleMode {
+        Normal,           // 常规模式
+        Supervisory,      // 监督模式
+        DXYMondayFriday,  // 东西院周一升周五降模式
+        Custom            // 自定义模式
     };
+
     // 构造函数
-    SchedulingManager(const Flag_group& flagGroup, bool useTotalTimesRule = false, HandoverRule handoverRule = NoRule)
-        : flagGroup(flagGroup), useTotalTimesRule(useTotalTimesRule), handoverRule(handoverRule) {
+    SchedulingManager(const Flag_group& flagGroup)
+        : flagGroup(flagGroup),
+        mode(ScheduleMode::Normal)  // 初始化模式为常规模式
+    {
         initializeAvailableMembers();// 通过队员的isWork的信息统计参加排班的人
     }
+
+
     // 部署工作表基础准备资源，排班操作的入口
     void schedule() {
         const int totalSlots = 10;// 一周10个工作时间段,升旗时间对应0 2 4 6 8
@@ -100,26 +106,30 @@ public:
         }
         // 发出排班完成信号
         emit schedulingFinished();
+        checkedPositions = 0; // 每次结束排表重置checkedPositions避免下次警告信息异常
     }
 
     // 成员变量的get与set函数声明
     bool getUseTotalTimesRule() const;
-    void setUseTotalTimesRule(bool newUseTotalTimesRule);
     const Flag_group &getFlagGroup() const;
-    std::vector<Person *> getAvailableMembers() const;
-    void setAvailableMembers(const std::vector<Person *> &newAvailableMembers);
     std::vector<std::vector<std::vector<Person *> > > getScheduleTable() const;
     void setScheduleTable(const std::vector<std::vector<std::vector<Person *> > > &newScheduleTable);
-    HandoverRule getHandoverRule() const;
-    void setHandoverRule(HandoverRule newHandoverRule);
+    std::vector<Person *> getAvailableMembers() const;
+    void setAvailableMembers(const std::vector<Person *> &newAvailableMembers);
+    // 设置排表模式
+    void setScheduleMode(ScheduleMode newMode) {
+        mode = newMode;
+    }
+
 
 private:
     const Flag_group& flagGroup; // 国旗班容器，保存队员信息
-    bool useTotalTimesRule; // 规则标签，判断是否使用总次数规则
-    HandoverRule handoverRule; // 规则标签，判断是否使用交接规则
     std::unordered_map<std::string, int> warningCount; // 键值对容器，用于记录交接规则失败警告信息出现的次数
     std::vector<Person*> availableMembers; // 容器，保存参加排班的队员
     std::vector<std::vector<std::vector<Person*>>> scheduleTable; // 工作表格
+    bool useTotalTimesRule;
+    ScheduleMode mode;
+    int checkedPositions = 0;        // 记录所有周二上午南鉴湖岗位的筛选结果已检查的岗位数
 
     void initializeAvailableMembers() {
         // 初始化辅助函数
@@ -140,67 +150,209 @@ private:
         // timeRow=1~4，表格行数，分别表示NJH升旗，DXY升旗，NJH降旗，DXY降旗
         // location=0~1，工作地点，分别表示南鉴湖，东西院
         // day = 1~5, 工作的时间，对应周一至周五
-        if (useTotalTimesRule) {
-            // 采用总次数排班
-            // 当 useTotalTimesRule 为 true 时，使用 std::sort 函数对 availableMembers 列表进行排序
-            // 排序依据是人员的总工作次数（通过 getAll_times() 方法获取），按照总工作次数从小到大排序。
-            // 这样做的目的是优先安排总工作次数较少的人员，使得人员的总工作量更加平均。
-            std::sort(availableMembers.begin(), availableMembers.end(), [](Person* a, Person* b) {
+        if(mode != ScheduleMode::Custom)
+        {
+            // 复制可用人员列表并按总次数排序
+            std::vector<Person*> candidates = availableMembers;
+            if (candidates.empty()) { // 防御性检查
+                emit schedulingWarning("警告：没有可用的候选人员！");
+                return nullptr;
+            }
+
+            std::sort(candidates.begin(), candidates.end(), [](Person* a, Person* b) {
                 return a->getAll_times() < b->getAll_times();
             });
-        } else {
-            // 普通排班
-            // 当 useTotalTimesRule 为 false 时，同样使用 std::sort 函数对 availableMembers 列表进行排序
-            // 但排序依据是人员本周的工作次数（通过 getTimes() 方法获取），按照本周工作次数从小到大排序。
-            // 这样可以优先安排本周工作次数较少的人员，保证本周内人员工作量的平均分配。
-            std::sort(availableMembers.begin(), availableMembers.end(), [](Person* a, Person* b) {
-                return a->getTimes() < b->getTimes();
-            });
-        }
-        // 人员筛选
-        // 交接规则的人员筛选
-        // 如果未选择交接规则，此筛选与下面的普通筛选无异
-        // isPersonSatisfyHandoverRule函数：判断person是否符合交接规则。
-        // getTime函数：检查person对应时间是否有有空
-        // isPersonBusy函数：检查person是否在该时间段已经安排了工作
-        for (auto person : availableMembers) {
-            if (isPersonSatisfyHandoverRule(person, slot, location) && person->getTime(timeRow, day)  && !isPersonBusy(person, slot)){
-                return person;
+
+            // 应用不同模式的约束条件
+            std::vector<Person*> validCandidates = applyModeConstraints(candidates, slot, timeRow, location, day);
+            std::vector<Person*> eligibleCandidates; // 符合交接规则的候选人列表
+            const std::vector<Person*>& allValidCandidates = validCandidates; // 保存所有有效候选人指针
+
+            // 仅在周二上午南鉴湖时检查交接规则
+            if (slot == 2 && location == 0) {
+                eligibleCandidates.reserve(allValidCandidates.size());
+                // 筛选符合交接规则的候选人指针
+                for (Person* person : allValidCandidates) {
+                    if (isPersonSatisfyHandoverRule(person, slot, location)) {
+                        eligibleCandidates.push_back(person);
+                    }
+                }
+                // 处理筛选结果
+                if (!eligibleCandidates.empty()) {
+                    // 从符合交接规则的候选人中随机选择
+                    std::random_device rd;
+                    std::mt19937 gen(rd());
+                    std::uniform_int_distribution<> dis(0, eligibleCandidates.size() - 1);
+                    return eligibleCandidates[dis(gen)];
+                } else {
+                    checkedPositions++;
+                    if(checkedPositions >= 3) {
+                        // 所有有效候选人都不符合交接规则，发出警告
+                        emit schedulingWarning(QString::fromStdString(
+                            "警告：周二上午南鉴湖任务中，无法满足交接规则，放弃以确保表格完整。"
+                            ));
+                    }
+                }
+                // 无论是否符合交接规则，都从所有有效候选人中随机选择
+                // 确保交接规则不会导致某些人负担过重
             }
-        }
 
-        // 警告信息临时变量
-        std::string days[] = { "周一", "周二", "周三", "周四", "周五" };
-        std::string halves[] = { "上午", "下午" };
-        std::string locations[] = { "NJH", "DXY" };
-        int dayIndex = (slot / 2);
-        int halfDayIndex = (slot % 2);
-
-        // 如果无法完成交接规则，将发出警报，放弃交接规则，重新选人
-        // 考虑到每次任务有三名队员，交接规则原则上最少只需要有一个队员完成交接即可，所以需要当一次任务的三个队员都不符合交接规则时才发送警告信息
-        // 生成无法完成交接规则的警告信息
-        std::string warning = "警告：在 " + days[dayIndex] + " " + halves[halfDayIndex] + " " + locations[location] + " 无法完成交接规则。";
-        // 增加该警告信息的计数
-        warningCount[warning]++;
-        // 当警告信息出现三次时才发送
-        if (warningCount[warning] == 3) {
-            emit schedulingWarning(QString::fromStdString(warning));
-        }
-
-        // 普通筛选
-        // 当用户采用交接规则但无法找出合适的队员时，将放弃交接规则，采用普通筛选，找到可执勤队员
-        // getTime函数：检查person对应时间是否有有空
-        // isPersonBusy函数：检查person是否在该时间段已经安排了工作
-        for (auto person : availableMembers) {
-            if (person->getTime(timeRow, day) && !isPersonBusy(person, slot)) {
-                return person;
+            // 从所有有效候选人中选择（改进版：更加均衡的次数分配）
+            if (allValidCandidates.empty()) {
+                // 处理无有效候选人的情况
+                if ((mode != ScheduleMode::DXYMondayFriday) || ((location == 1) && (slot == 0 || slot == 9))) {
+                    emit schedulingWarning(QString::fromStdString(
+                        "警告：在 " + getTimeDescription(slot, location) + " 无法选出合适的人员进行排班。"
+                        ));
+                }
+                return nullptr;
             }
+
+            // 计算当前最小排班次数和最大排班次数
+            int minTimes = INT_MAX;
+            for (Person* p : allValidCandidates) {
+                int times = p->getAll_times();
+                if (times < minTimes) minTimes = times;
+            }
+
+            // 筛选出排班次数等于minTimes的候选人
+            eligibleCandidates.clear();
+            for (Person* p : allValidCandidates) {
+                if (p->getAll_times() == minTimes) {
+                    eligibleCandidates.push_back(p);
+                }
+            }
+
+            // 如果没有候选人满足条件，退回到使用所有有效候选人
+            if (eligibleCandidates.empty()) {
+                eligibleCandidates = allValidCandidates;
+            }
+
+            // 在符合条件的候选人中随机选择
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<> dis(0, eligibleCandidates.size() - 1);
+            return eligibleCandidates[dis(gen)];
         }
-        // 普通筛选仍无法找到合适队员，系统将发送警告信息
-        warning = "警告：在 " + days[dayIndex] + " " + halves[halfDayIndex] + " " + locations[location] + " 无法选出合适的人员进行排班。";
-        emit schedulingWarning(QString::fromStdString(warning));
         return nullptr;
     }
+    std::string getTimeDescription(int slot, int location) {
+        std::string days[] = { "周一", "周二", "周三", "周四", "周五" };
+        std::string halves[] = { "上午升旗", "下午降旗" };
+        std::string locations[] = { "南鉴湖", "东西院" };
+
+        int dayIndex = slot / 2;
+        int halfDayIndex = slot % 2;
+
+        std::string timeDesc = days[dayIndex] + locations[location] + halves[halfDayIndex] ;
+        return timeDesc;
+    }
+
+    std::vector<Person*> applyModeConstraints(const std::vector<Person*>& candidates, int slot, int timeRow, int location, int day) {
+        std::vector<Person*> validCandidates;
+
+        for (auto person : candidates) {
+            bool isValid = true;
+
+            // 基础条件：时间有空且未被安排
+            if (!person->getTime(timeRow, day) || isPersonBusy(person, slot)) {
+                isValid = false;
+            }
+
+            // 应用女队员限制规则
+            if (isValid && wouldExceedFemaleLimit(person, slot, location)) {
+                isValid = false;
+            }
+
+            // 应用监督模式规则（至少一名非大一队员）
+            if (isValid && mode == ScheduleMode::Supervisory) {
+                if (!isSupervisoryRequirementMet(person, slot, location)) {
+                    isValid = false;
+                }
+            }
+
+            // 应用东西院模式规则（仅特定位置排班）
+            if (isValid && mode == ScheduleMode::DXYMondayFriday) {
+                if (!isValidSlotForDXYMode(slot, location)) {
+                    isValid = false;
+                }
+            }
+
+            if (isValid) {
+                validCandidates.push_back(person);
+            }
+        }
+
+        return validCandidates;
+    }
+
+    bool wouldExceedFemaleLimit(Person* person, int slot, int location) {
+        if (person->getGender() != true) {
+            return false;
+        }
+
+        // 计算当前任务中已有的女队员数量
+        int femaleCount = 0;
+        for (int pos = 0; pos < 3; ++pos) {
+            if (scheduleTable[slot][location][pos] &&
+                scheduleTable[slot][location][pos]->getGender() == true) {
+                femaleCount++;
+            }
+        }
+
+        // 如果加入当前队员会使女队员数量达到3，则返回true
+        return (femaleCount + 1) >= 3;
+    }
+
+    bool isPersonSatisfyHandoverRule(Person* person, int slot, int location) {
+        // 检查周二交接规则：slot=2, location=0的任务中，至少有一人参与了slot=1, location=0的任务
+        if (slot != 2 || location != 0) {
+            return true; // 不是周二交接的任务，直接返回true
+        }
+
+        // 检查slot=1, location=0的任务中是否有当前人员
+        for (int pos = 0; pos < 3; ++pos) {
+            if (scheduleTable[1][0][pos] == person) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool isSupervisoryRequirementMet(Person* person, int slot, int location) {
+        // 如果当前人员是非大一学生，直接满足条件
+        if (person->getGrade() != 1) {
+            return true;
+        }
+
+        // 如果当前人员是大一学生，检查当前任务中是否已经有非大一学生
+        for (int pos = 0; pos < 3; ++pos) {
+            if (scheduleTable[slot][location][pos] &&
+                scheduleTable[slot][location][pos]->getGrade() != 1) {
+                return true;
+            }
+        }
+
+        // 如果当前任务中没有非大一学生，且候选人员是大一学生，则不满足条件
+        return false;
+    }
+
+    bool isValidSlotForDXYMode(int slot, int location) {
+        // DXYMondayFriday模式只对特定位置进行排班
+        // slot:0 location:0 || slot:2 location:0||slot:4 location:0 ||slot:6 location:0 ||slot:8 location:0
+        // || slot:0 location:1 ||
+        // || slot:1 location:0 ||slot:3 location:0 ||slot:5 location:0 ||slot:7 location:0 ||slot:9 location:0
+        // || slot:9 location:1 ||
+
+        bool isValidNJH = (location == 0);
+
+        bool isValidDXY = (location == 1) && (slot == 0 || slot == 9);
+
+        return isValidNJH || isValidDXY;
+    }
+
+
     // 判断是否已经在同一时间段安排了工作
     bool isPersonBusy(Person* person, int slot) const {
         // 将对应时间段slot的所有位置都遍历一遍，查看是否已经存在该队员person
@@ -213,61 +365,18 @@ private:
         }
         return false;
     }
-
-    // 判断人员是否满足交接规则
-    bool isPersonSatisfyHandoverRule(Person* person, int slot, int location) {
-        switch (handoverRule) {
-            case MondayHandoverRule: // 仅周二的南鉴湖升旗采用交接规则
-            {
-                if (slot == 2 && location == 0) { // 对应表格一行二列，周二南鉴湖升旗
-                    auto& firstColumn = scheduleTable[1][0];// 对应表格三行一列，周一南鉴湖降旗
-                    for (auto member : firstColumn) {
-                        if (member == person) {
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-                return true;
-            }
-            case AllHandoverRule: // 全周（周二至周五）南鉴湖升旗采用交接规则
-            {
-                int currentCol = slot % 2;//值为0~1,检查当前是否为升旗时间段
-                if (currentCol == 0 && !location && slot)
-                // currentCol == 0:当前为升旗任务  !location == 1:当前为南鉴湖任务  slot != 0:当前不是周一升旗任务
-                // 所以，能进入if语句内的条件是：周二到周五的南鉴湖升旗任务
-                {
-                    auto& prevColumn = scheduleTable[slot-1][location];//前一天南鉴湖降旗情况
-                    // 查看该队员是否安排在前一天南鉴湖降旗任务中
-                    for (auto member : prevColumn) {
-                        if (member == person) {
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-                return true;
-            }
-            case NoRule: // 不采用交接规则
-                return true;
-        }
-        return true;
-    }
 };
 
-inline bool SchedulingManager::getUseTotalTimesRule() const
+
+
+inline std::vector<std::vector<std::vector<Person *> > > SchedulingManager::getScheduleTable() const
 {
-    return useTotalTimesRule;
+    return scheduleTable;
 }
 
-inline void SchedulingManager::setUseTotalTimesRule(bool newUseTotalTimesRule)
+inline void SchedulingManager::setScheduleTable(const std::vector<std::vector<std::vector<Person *> > > &newScheduleTable)
 {
-    useTotalTimesRule = newUseTotalTimesRule;
-}
-
-inline const Flag_group &SchedulingManager::getFlagGroup() const
-{
-    return flagGroup;
+    scheduleTable = newScheduleTable;
 }
 
 inline std::vector<Person *> SchedulingManager::getAvailableMembers() const
@@ -280,22 +389,4 @@ inline void SchedulingManager::setAvailableMembers(const std::vector<Person *> &
     availableMembers = newAvailableMembers;
 }
 
-inline std::vector<std::vector<std::vector<Person *> > > SchedulingManager::getScheduleTable() const
-{
-    return scheduleTable;
-}
 
-inline void SchedulingManager::setScheduleTable(const std::vector<std::vector<std::vector<Person *> > > &newScheduleTable)
-{
-    scheduleTable = newScheduleTable;
-}
-
-inline SchedulingManager::HandoverRule SchedulingManager::getHandoverRule() const
-{
-    return handoverRule;
-}
-
-inline void SchedulingManager::setHandoverRule(SchedulingManager::HandoverRule newHandoverRule)
-{
-    handoverRule = newHandoverRule;
-}

@@ -23,6 +23,7 @@ public:
                     out << QString::fromStdString(person.getName()) << "|" // 姓名
                         << (person.getGender() ? "1" : "0") << "|" // 性别
                         << person.getGroup() << "|" // 所属组别
+                        << person.getGrade() << "|"
                         << QString::fromStdString(person.getPhone_number()) << "|" // 联系电话
                         << QString::fromStdString(person.getNative_place()) << "|" // 籍贯
                         << QString::fromStdString(person.getNative()) << "|" // 民族
@@ -56,27 +57,28 @@ public:
             while (!in.atEnd()) {// 判断文件读取是否结束
                 QString line = in.readLine();// 读取一行文件数据
                 QStringList parts = line.split("|"); // 选定的数据分隔号
-                if (parts.size() == 10 + 20 + 3) {// 判定是否是正确的Person数据类型，如果是空行/其他错误数据，将不进行读取保存。
+                if (parts.size() == 12 + 20 + 2) {// 判定是否是正确的Person数据类型，如果是空行/其他错误数据，将不进行读取保存。
                     std::string name = parts[0].toStdString(); // 姓名
                     bool gender = parts[1].toInt(); // 性别
                     int group = parts[2].toInt(); // 所属组别
-                    std::string phone_number = parts[3].toStdString(); // 联系电话
-                    std::string native_place = parts[4].toStdString(); // 籍贯
-                    std::string native = parts[5].toStdString(); // 民族
-                    std::string dorm = parts[6].toStdString(); // 寝室号
-                    std::string school = parts[7].toStdString(); // 学院
-                    std::string classname = parts[8].toStdString(); // 专业班级
-                    std::string birthday = parts[9].toStdString(); // 生日
-                    bool isWork = parts[10].toInt(); // 是否参与排班
+                    int grade = parts[3].toInt(); // 所属年级
+                    std::string phone_number = parts[4].toStdString(); // 联系电话
+                    std::string native_place = parts[5].toStdString(); // 籍贯
+                    std::string native = parts[6].toStdString(); // 民族
+                    std::string dorm = parts[7].toStdString(); // 寝室号
+                    std::string school = parts[8].toStdString(); // 学院
+                    std::string classname = parts[9].toStdString(); // 专业班级
+                    std::string birthday = parts[10].toStdString(); // 生日
+                    bool isWork = parts[11].toInt(); // 是否参与排班
                     bool time[4][5];
                     for (int i = 0; i < 4; ++i) {
                         for (int j = 0; j < 5; ++j) {
-                            time[i][j] = parts[11 + i * 5 + j].toInt(); // 时间安排表
+                            time[i][j] = parts[12 + i * 5 + j].toInt(); // 时间安排表
                         }
                     }
-                    int times = parts[31].toInt(); // 本次执勤次数
-                    int all_times = parts[32].toInt(); // 总执勤次数
-                    Person person(name, gender, group, phone_number, native_place, native, dorm, school, classname, birthday, isWork, time, times, all_times);
+                    int times = parts[32].toInt(); // 本次执勤次数
+                    int all_times = parts[33].toInt(); // 总执勤次数
+                    Person person(name, gender, group, grade, phone_number, native_place, native, dorm, school, classname, birthday, isWork, time, times, all_times);
                     flagGroup.addPersonToGroup(person, group);
                 }
             }

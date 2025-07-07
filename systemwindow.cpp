@@ -13,6 +13,9 @@
 #include "fileFunction.h"
 #include "dataFunction.h"
 
+Flag_group backupGroup; // 全局变量,用于撤销操作
+QString finalText_excel; // 全局变量，用于导出表格时输出统计的表格信息
+
 SystemWindow::SystemWindow(QWidget *parent)
     : QMainWindow(parent) // 窗口
     , ui(new Ui::SystemWindow) // ui界面指针
@@ -31,28 +34,34 @@ SystemWindow::SystemWindow(QWidget *parent)
     // 执勤管理界面
     // 连接按钮和复选框的信号与槽
     connect(ui->tabulateButton, &QPushButton::clicked, this, &SystemWindow::onTabulateButtonClicked); // 排表按钮点击事件
-    connect(ui->clearButton, &QPushButton::clicked, this, &SystemWindow::onClearButtonClicked); // 清空表格按钮点击事件
+    connect(ui->clearButton, &QPushButton::clicked, this, &SystemWindow::onClearButtonClicked); // 撤销操作按钮点击事件
     connect(ui->alterButton, &QPushButton::clicked, this, &SystemWindow::onResetButtonClicked); // 重置队员执勤总次数按钮点击事件
     connect(ui->deriveButton, &QPushButton::clicked, this, &SystemWindow::onExportButtonClicked); // 导出表格按钮点击事件
-    connect(ui->times_rule, &QCheckBox::clicked, this, &SystemWindow::onTotalTimesRuleClicked); // 总次数规则按钮点击事件
-    // 连接单选按钮信号与槽
-    // 交接工作单选按钮点击事件
-    connect(ui->No_handover_rule_radioButton, &QRadioButton::clicked, this, &SystemWindow::onRadioButtonClicked); // 不采用交接规则
-    connect(ui->Monday_handover_rule_radioButton, &QRadioButton::clicked, this, &SystemWindow::onRadioButtonClicked); // 仅周二的南鉴湖升旗采用交接规则
-    connect(ui->All_handover_rule_radioButton, &QRadioButton::clicked, this, &SystemWindow::onRadioButtonClicked); // 全周（周二至周五）南鉴湖升旗采用交接规则
-    // 将不采用交接按钮默认设置为选定状态
-    ui->No_handover_rule_radioButton->setChecked(true);
+    // 导出表格、撤销操作在初始时取消交互
+    ui->deriveButton->setEnabled(false);
+    ui->clearButton->setEnabled(false);
+    // 进度对话框指针
+    exportProgress = nullptr;
+    // 以常规模式为默认排表规则
+    ui->normal_mode_radioButton->setChecked(true);
+    // 因自定义模式未实现，取消其交互
+    ui->custom_mode_radioButton->setEnabled(false);
 
     // 队员管理界面
     // 更新四个组的队员标签界面
     for (int groupIndex = 1; groupIndex <= 4; ++groupIndex) {
         updateListView(groupIndex);
     }
-    // 将 FlagGroup 中所有队员的 iswork 信息全部调成 false，对应全组执勤按钮的未选定状态
+    // 设置全组执勤按钮的选中状态，默认为被选中
+    ui->group1_iswork_radioButton->setChecked(true);
+    ui->group2_iswork_radioButton->setChecked(true);
+    ui->group3_iswork_radioButton->setChecked(true);
+    ui->group4_iswork_radioButton->setChecked(true);
+    // 将 FlagGroup 中所有队员的 iswork 信息全部调成 true，对应全组执勤按钮的默认选定状态
     for (int groupIndex = 1; groupIndex <= 4; ++groupIndex) {
         auto& members = flagGroup.getGroupMembers(groupIndex); // 返回对应组的队员列表
         for (auto& member : members) {
-            member.setIsWork(false); // 修改iswork信息
+            member.setIsWork(true); // 修改iswork信息
         }
     }
     // 设置 availableTime_groupBox 中除“全选”按钮外的按钮为 checkable
@@ -70,25 +79,25 @@ SystemWindow::SystemWindow(QWidget *parent)
         }
     }
     // 连接一组的信号与槽
-    connect(ui->group1_add_pushButton, &QPushButton::clicked, [this]() { onGroupAddButtonClicked(1); });
-    connect(ui->group1_delete_pushButton, &QPushButton::clicked, [this]() { onGroupDeleteButtonClicked(1); });
-    connect(ui->group1_iswork_radioButton, &QRadioButton::clicked, [this]() { onGroupIsWorkRadioButtonClicked(1); });
-    connect(ui->group1_info_listView, &QListView::clicked, [this](const QModelIndex &index) { onListViewItemClicked(index, 1); });
+    connect(ui->group1_add_pushButton, &QPushButton::clicked, this, [this]() { onGroupAddButtonClicked(1); });
+    connect(ui->group1_delete_pushButton, &QPushButton::clicked, this, [this]() { onGroupDeleteButtonClicked(1); });
+    connect(ui->group1_iswork_radioButton, &QRadioButton::clicked, this, [this]() { onGroupIsWorkRadioButtonClicked(1); });
+    connect(ui->group1_info_listView, &QListView::clicked, this, [this](const QModelIndex &index) { onListViewItemClicked(index, 1); });
     // 连接二组的信号与槽
-    connect(ui->group2_add_pushButton, &QPushButton::clicked, [this]() { onGroupAddButtonClicked(2); });
-    connect(ui->group2_delete_pushButton, &QPushButton::clicked, [this]() { onGroupDeleteButtonClicked(2); });
-    connect(ui->group2_iswork_radioButton, &QRadioButton::clicked, [this]() { onGroupIsWorkRadioButtonClicked(2); });
-    connect(ui->group2_info_listView, &QListView::clicked, [this](const QModelIndex &index) { onListViewItemClicked(index, 2); });
+    connect(ui->group2_add_pushButton, &QPushButton::clicked, this, [this]() { onGroupAddButtonClicked(2); });
+    connect(ui->group2_delete_pushButton, &QPushButton::clicked, this, [this]() { onGroupDeleteButtonClicked(2); });
+    connect(ui->group2_iswork_radioButton, &QRadioButton::clicked, this, [this]() { onGroupIsWorkRadioButtonClicked(2); });
+    connect(ui->group2_info_listView, &QListView::clicked, this, [this](const QModelIndex &index) { onListViewItemClicked(index, 2); });
     // 连接三组的信号与槽
-    connect(ui->group3_add_pushButton, &QPushButton::clicked, [this]() { onGroupAddButtonClicked(3); });
-    connect(ui->group3_delete_pushButton, &QPushButton::clicked, [this]() { onGroupDeleteButtonClicked(3); });
-    connect(ui->group3_iswork_radioButton, &QRadioButton::clicked, [this]() { onGroupIsWorkRadioButtonClicked(3); });
-    connect(ui->group3_info_listView, &QListView::clicked, [this](const QModelIndex &index) { onListViewItemClicked(index, 3); });
+    connect(ui->group3_add_pushButton, &QPushButton::clicked, this, [this]() { onGroupAddButtonClicked(3); });
+    connect(ui->group3_delete_pushButton, &QPushButton::clicked, this, [this]() { onGroupDeleteButtonClicked(3); });
+    connect(ui->group3_iswork_radioButton, &QRadioButton::clicked, this, [this]() { onGroupIsWorkRadioButtonClicked(3); });
+    connect(ui->group3_info_listView, &QListView::clicked, this, [this](const QModelIndex &index) { onListViewItemClicked(index, 3); });
     // 连接四组的信号与槽
-    connect(ui->group4_add_pushButton, &QPushButton::clicked, [this]() { onGroupAddButtonClicked(4); });
-    connect(ui->group4_delete_pushButton, &QPushButton::clicked, [this]() { onGroupDeleteButtonClicked(4); });
-    connect(ui->group4_iswork_radioButton, &QRadioButton::clicked, [this]() { onGroupIsWorkRadioButtonClicked(4); });
-    connect(ui->group4_info_listView, &QListView::clicked, [this](const QModelIndex &index) { onListViewItemClicked(index, 4); });
+    connect(ui->group4_add_pushButton, &QPushButton::clicked, this, [this]() { onGroupAddButtonClicked(4); });
+    connect(ui->group4_delete_pushButton, &QPushButton::clicked, this, [this]() { onGroupDeleteButtonClicked(4); });
+    connect(ui->group4_iswork_radioButton, &QRadioButton::clicked, this, [this]() { onGroupIsWorkRadioButtonClicked(4); });
+    connect(ui->group4_info_listView, &QListView::clicked, this, [this](const QModelIndex &index) { onListViewItemClicked(index, 4); });
 
     // 基础信息栏内容
     // 连接 group_combobox 的 currentIndexChanged 信号，组别修改事件
@@ -103,33 +112,36 @@ SystemWindow::SystemWindow(QWidget *parent)
     connect(ui->class_lineEdit, &QLineEdit::editingFinished, this, &SystemWindow::onInfoLineEditChanged);
     connect(ui->birthday_lineEdit, &QLineEdit::editingFinished, this, &SystemWindow::onInfoLineEditChanged);
     connect(ui->gender_combobox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SystemWindow::onInfoLineEditChanged);
+    connect(ui->grade_comboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SystemWindow::onInfoLineEditChanged);
+    connect(ui->total_times_spinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &SystemWindow::onInfoLineEditChanged);
 
     // 连接出勤安排按钮的信号与槽
-    connect(ui->monday_up_NJH_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->monday_up_NJH_pushButton);});
-    connect(ui->monday_up_DXY_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->monday_up_DXY_pushButton);});
-    connect(ui->tuesday_up_NJH_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->tuesday_up_NJH_pushButton);});
-    connect(ui->tuesday_up_DXY_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->tuesday_up_DXY_pushButton);});
-    connect(ui->wednesday_up_NJH_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->wednesday_up_NJH_pushButton);});
-    connect(ui->wednesday_up_DXY_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->wednesday_up_DXY_pushButton);});
-    connect(ui->thursday_up_NJH_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->thursday_up_NJH_pushButton);});
-    connect(ui->thursday_up_DXY_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->thursday_up_DXY_pushButton);});
-    connect(ui->friday_up_NJH_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->friday_up_NJH_pushButton);});
-    connect(ui->friday_up_DXY_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->friday_up_DXY_pushButton);});
-    connect(ui->monday_down_NJH_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->monday_down_NJH_pushButton);});
-    connect(ui->monday_down_DXY_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->monday_down_DXY_pushButton);});
-    connect(ui->tuesday_down_NJH_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->tuesday_down_NJH_pushButton);});
-    connect(ui->tuesday_down_DXY_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->tuesday_down_DXY_pushButton);});
-    connect(ui->wednesday_down_NJH_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->wednesday_down_NJH_pushButton);});
-    connect(ui->wednesday_down_DXY_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->wednesday_down_DXY_pushButton);});
-    connect(ui->thursday_down_NJH_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->thursday_down_NJH_pushButton);});
-    connect(ui->thursday_down_DXY_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->thursday_down_DXY_pushButton);});
-    connect(ui->friday_down_NJH_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->friday_down_NJH_pushButton);});
-    connect(ui->friday_down_DXY_pushButton, &QPushButton::clicked, [this](bool) {onAttendanceButtonClicked(ui->friday_down_DXY_pushButton);});
+    connect(ui->monday_up_NJH_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->monday_up_NJH_pushButton);});
+    connect(ui->monday_up_DXY_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->monday_up_DXY_pushButton);});
+    connect(ui->tuesday_up_NJH_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->tuesday_up_NJH_pushButton);});
+    connect(ui->tuesday_up_DXY_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->tuesday_up_DXY_pushButton);});
+    connect(ui->wednesday_up_NJH_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->wednesday_up_NJH_pushButton);});
+    connect(ui->wednesday_up_DXY_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->wednesday_up_DXY_pushButton);});
+    connect(ui->thursday_up_NJH_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->thursday_up_NJH_pushButton);});
+    connect(ui->thursday_up_DXY_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->thursday_up_DXY_pushButton);});
+    connect(ui->friday_up_NJH_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->friday_up_NJH_pushButton);});
+    connect(ui->friday_up_DXY_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->friday_up_DXY_pushButton);});
+    connect(ui->monday_down_NJH_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->monday_down_NJH_pushButton);});
+    connect(ui->monday_down_DXY_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->monday_down_DXY_pushButton);});
+    connect(ui->tuesday_down_NJH_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->tuesday_down_NJH_pushButton);});
+    connect(ui->tuesday_down_DXY_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->tuesday_down_DXY_pushButton);});
+    connect(ui->wednesday_down_NJH_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->wednesday_down_NJH_pushButton);});
+    connect(ui->wednesday_down_DXY_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->wednesday_down_DXY_pushButton);});
+    connect(ui->thursday_down_NJH_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->thursday_down_NJH_pushButton);});
+    connect(ui->thursday_down_DXY_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->thursday_down_DXY_pushButton);});
+    connect(ui->friday_down_NJH_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->friday_down_NJH_pushButton);});
+    connect(ui->friday_down_DXY_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->friday_down_DXY_pushButton);});
     // 连接是否执勤按钮的信号与槽
     connect(ui->isWork_pushButton, &QPushButton::clicked, this, &SystemWindow::onIsWorkPushButtonClicked);
 }
 SystemWindow::~SystemWindow()
 {
+    delete exportProgress;
     delete ui;
 }
 //关闭窗口事件
@@ -150,25 +162,42 @@ void SystemWindow::closeEvent(QCloseEvent *event)
 
 //值周管理界面函数实现
 void SystemWindow::onTabulateButtonClicked() {
+
     // 制表按钮
     if (!manager) {
-        bool useTotalTimesRule = ui->times_rule->isChecked();
-        SchedulingManager::HandoverRule handoverRule = SchedulingManager::NoRule;
-        if (ui->Monday_handover_rule_radioButton->isChecked()) {
-            handoverRule = SchedulingManager::MondayHandoverRule;
-        } else if (ui->All_handover_rule_radioButton->isChecked()) {
-            handoverRule = SchedulingManager::AllHandoverRule;
-        }
-        manager = new SchedulingManager(flagGroup, useTotalTimesRule, handoverRule);
+        backupGroup = flagGroup; // 保存当前状态
+        manager = new SchedulingManager(flagGroup);
         connect(manager, &SchedulingManager::schedulingWarning, this, &SystemWindow::handleSchedulingWarning);  // 连接警告信号与发送警告信息的槽函数
-        connect(manager, &SchedulingManager::schedulingFinished, [this]() {
+        connect(manager, &SchedulingManager::schedulingFinished, this, [this]() {
+            ui->tabulateButton->setEnabled(false);
+            ui->deriveButton->setEnabled(true);
+            ui->clearButton->setEnabled(true);
             updateTableWidget(*manager); // 制表操作
             updateTextEdit(*manager); // 更新制表结果文本域
             delete manager;
             manager = nullptr;
         });
     }
-    manager->schedule();
+
+    // 在排表前直接检查单选按钮状态并设置模式
+    if (ui->normal_mode_radioButton->isChecked()) {
+        manager->setScheduleMode(SchedulingManager::ScheduleMode::Normal);
+    } else if (ui->supervisory_mode_radioButton->isChecked()) {
+        manager->setScheduleMode(SchedulingManager::ScheduleMode::Supervisory);
+    } else if (ui->DXY_only_twice_mode_radioButton->isChecked()) {
+        manager->setScheduleMode(SchedulingManager::ScheduleMode::DXYMondayFriday);
+    } else if (ui->custom_mode_radioButton->isChecked()) {
+        manager->setScheduleMode(SchedulingManager::ScheduleMode::Custom);
+    } else {
+        // 如果没有选中任何模式，设置一个默认模式
+        manager->setScheduleMode(SchedulingManager::ScheduleMode::Normal);
+    }
+    // 检查可用成员数量，不足则直接返回
+    if (manager->getAvailableMembers().size() < 6) {
+        QMessageBox::warning(nullptr,"排表错误警告","现在国旗班6个队员都凑不出来了吗:(");
+    } else {
+        manager->schedule();
+    }
 }
 void SystemWindow::updateTableWidget(const SchedulingManager& manager) {
     //制表操作，点击制表按钮后的辅助函数
@@ -239,14 +268,6 @@ void SystemWindow::updateTableWidget(const SchedulingManager& manager) {
     // 计算新的宽度和高度
     int newWindowWidth = totalTableWidth + taskToolBoxWidth + marginLeft + marginRight + extraWidth;
     int newWindowHeight = totalTableHeight + timesResultHeight + marginTop + marginBottom + extraHeight;
-    // // 调整 task_worksheet_splitter 中 QTableWidget 和 timesResult 的大小
-    // QList<int> taskWorksheetSizes;
-    // taskWorksheetSizes << totalTableHeight << timesResultHeight;
-    // ui->task_worksheet_splitter->setSizes(taskWorksheetSizes);
-    // // 调整 task_all_splitter 中 task_toolBox 和 task_worksheet_splitter 的大小
-    // QList<int> taskAllSizes;
-    // taskAllSizes << taskToolBoxWidth << totalTableWidth;
-    // ui->task_all_splitter->setSizes(taskAllSizes);
 
     // 获取当前窗口的大小
     QSize currentWindowSize = this->size();
@@ -261,6 +282,7 @@ void SystemWindow::updateTableWidget(const SchedulingManager& manager) {
     }
 
 }
+
 void SystemWindow::handleSchedulingWarning(const QString& warningMessage)
 {
     // 排表过程出现无法选出合适人选时的情况，保存警告信息
@@ -277,15 +299,28 @@ void SystemWindow::updateTextEdit(const SchedulingManager& manager) {
     }
     // 拼接警告信息和排班结果文本
     QString finalText = warningMessages + resultText;
+    finalText_excel = finalText;
     // 设置最终文本到文本编辑框
     ui->timesResult->setPlainText(finalText);
     // 清空警告信息，以便下次排表使用
     warningMessages.clear();
 }
 void SystemWindow::onClearButtonClicked() {
-    //清空表格按钮
+    // 撤销操作按钮
+    if (backupGroup.isEmpty()) {
+        QMessageBox::information(this, "无操作可撤销", "当前无排表记录可撤销");
+        return;
+    }
+    // 恢复备份数据
+    flagGroup = backupGroup;
+
+    // 刷新表格和统计信息
     ui->worksheet->clearContents();
     ui->timesResult->clear();
+    QMessageBox::information(this, "撤销成功", "已恢复至上一次排表前状态");
+    ui->deriveButton->setEnabled(false);
+    ui->clearButton->setEnabled(false);
+    ui->tabulateButton->setEnabled(true);
 }
 void SystemWindow::onResetButtonClicked() {
     //重置队员执勤次数按钮
@@ -309,161 +344,217 @@ void SystemWindow::onExportButtonClicked()
     // 获取保存文件路径
     QString filePath = QFileDialog::getSaveFileName(this, "导出表格", "第X周升降旗.xlsx", "Excel 文件 (*.xlsx)");
     // 检查文件路径
-    if (!filePath.isEmpty()) {
-        // 启动 Excel 应用程序
-        QAxObject *excel = new QAxObject("Excel.Application");
-        if (excel) {
-            // 设置 Excel 应用程序不可见
-            excel->dynamicCall("SetVisible(bool)", false);
-            // 获取 Excel 应用程序的工作簿集合
-            QAxObject *workbooks = excel->querySubObject("Workbooks");
-            // 创建一个新的工作簿
-            QAxObject *workbook = workbooks->querySubObject("Add");
-            if (workbook) {
-                // 获取新工作簿的第一个工作表
-                QAxObject *worksheetExcel = workbook->querySubObject("Worksheets(int)", 1);
-                // 1. 所有拥有文字的区域（A1~G5矩阵区域）都应该居中对齐
-                QAxObject *allRange = worksheetExcel->querySubObject("Range(const QString&)", "A1:G5");
-                QAxObject *allAlignment = allRange->querySubObject("HorizontalAlignment");
-                if (allAlignment) {
-                    allAlignment->dynamicCall("SetValue(int)", -4108); // xlCenter
-                    delete allAlignment;
+    if (filePath.isEmpty()) return;
+
+    // 确保进度对话框被正确初始化和重置
+    if (exportProgress == nullptr) {
+        exportProgress = new QProgressDialog(this);
+        exportProgress->setWindowModality(Qt::ApplicationModal);
+        exportProgress->setWindowFlags(exportProgress->windowFlags() | Qt::WindowStaysOnTopHint);
+        exportProgress->setCancelButton(nullptr);
+        exportProgress->setMinimumDuration(0); // 允许快速显示
+    } else {
+        // 重置对话框状态
+        exportProgress->reset();
+        exportProgress->setWindowModality(Qt::ApplicationModal);
+        exportProgress->setWindowFlags(exportProgress->windowFlags() | Qt::WindowStaysOnTopHint);
+        exportProgress->setCancelButton(nullptr);
+        exportProgress->setMinimumDuration(0);
+    }
+
+    // 显示初始提示信息
+    exportProgress->setWindowTitle("导出进度");
+    exportProgress->setLabelText("正在导出表格，请稍候...");
+    exportProgress->setRange(0, 0); // 不确定进度模式
+    exportProgress->show();
+
+    // 强制更新UI，确保初始提示显示
+    QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    QApplication::processEvents(QEventLoop::ExcludeSocketNotifiers);
+    QApplication::processEvents(QEventLoop::WaitForMoreEvents, 100); // 强制显示100ms
+
+    QAxObject *excel = new QAxObject("Excel.Application");
+    if (excel) {
+        // 设置 Excel 应用程序不可见
+        excel->dynamicCall("SetVisible(bool)", false);
+        // 获取 Excel 应用程序的工作簿集合
+        QAxObject *workbooks = excel->querySubObject("Workbooks");
+        // 分段处理：每完成一个主要步骤就处理一次事件
+        processStep("创建工作簿", exportProgress); // 自定义函数，见下方
+        // 创建一个新的工作簿
+        QAxObject *workbook = workbooks->querySubObject("Add");
+        if (workbook) {
+            // ========== 第一个工作表：统计信息 ==========
+            // 获取新工作簿的第一个工作表
+            QAxObject *statsSheet = workbook->querySubObject("Worksheets(int)", 1);
+            statsSheet->dynamicCall("SetName(const QString&)", "统计信息");
+            // 将 finalText 内容逐行写入工作表
+            QStringList lines = finalText_excel.split('\n');
+            for (int i = 0; i < lines.size(); ++i) {
+                QAxObject *cell = statsSheet->querySubObject("Cells(int,int)", i + 1, 1);
+                cell->dynamicCall("SetValue(const QVariant&)", lines[i]);
+                // 获取字体对象并设置颜色为蓝色
+                QAxObject *font = cell->querySubObject("Font");
+                if (font) {
+                    // RGB 值转换为 BGR（Excel 使用 BGR 格式）
+                    int blueColor = rgbToBgr(QColor(Qt::blue));
+                    font->dynamicCall("SetColor(int)", blueColor);
+                    delete font; // 释放对象，避免内存泄漏
                 }
-                // 2. 第一行列标题C1~G1区域，文本内容不变，字体格式改为16号黑体，背景填充色改为#FFC000
-                QAxObject *headerRange = worksheetExcel->querySubObject("Range(const QString&)", "C1:G1");
-                QAxObject *headerFont = headerRange->querySubObject("Font");
-                headerFont->dynamicCall("SetName(const QString&)", "黑体");
-                headerFont->dynamicCall("SetSize(int)", 16);
-                QAxObject *headerInterior = headerRange->querySubObject("Interior");
-                QColor Color("#FFC000");
-                int BgrColor = rgbToBgr(Color);
-                headerInterior->dynamicCall("SetColor(int)", BgrColor);
-                // 复制列标题到 Excel
-                for (int col = 0; col < ui->worksheet->columnCount(); ++col) {
-                    QString headerText = ui->worksheet->horizontalHeaderItem(col)->text();
-                    QAxObject *cell = worksheetExcel->querySubObject("Cells(int,int)", 1, col + 3); // 从第一行第三列开始写列标题
-                    cell->dynamicCall("SetValue(const QVariant&)", headerText);
-                }
-                // 3. 第一列A2和A3区域合并，并输入“升旗”文本，字体格式改为16号黑体，背景填充色改为#FFFF00
-                // 两者使用的颜色单位不同，不能直接转换需要rgb to bgr的操作
-                QAxObject *riseFlagRange = worksheetExcel->querySubObject("Range(const QString&)", "A2:A3");
-                riseFlagRange->dynamicCall("Merge()");
-                QAxObject *riseFlagCell = worksheetExcel->querySubObject("Cells(int,int)", 2, 1);
-                riseFlagCell->dynamicCall("SetValue(const QVariant&)", "升旗");
-                QAxObject *riseFlagFont = riseFlagRange->querySubObject("Font");
-                riseFlagFont->dynamicCall("SetName(const QString&)", "黑体");
-                riseFlagFont->dynamicCall("SetSize(int)", 16);
-                QAxObject *riseFlagInterior = riseFlagRange->querySubObject("Interior");
-                Color = QColor("#FFF000");
-                BgrColor = rgbToBgr(Color);
-                riseFlagInterior->dynamicCall("SetColor(int)", BgrColor);
-                // 4. 第一列A4和A5区域合并，并输入“降旗”文本，字体格式改为16号黑体，背景填充色改为#FFFF00
-                QAxObject *lowerFlagRange = worksheetExcel->querySubObject("Range(const QString&)", "A4:A5");
-                lowerFlagRange->dynamicCall("Merge()");
-                QAxObject *lowerFlagCell = worksheetExcel->querySubObject("Cells(int,int)", 4, 1);
-                lowerFlagCell->dynamicCall("SetValue(const QVariant&)", "降旗");
-                QAxObject *lowerFlagFont = lowerFlagRange->querySubObject("Font");
-                lowerFlagFont->dynamicCall("SetName(const QString&)", "黑体");
-                lowerFlagFont->dynamicCall("SetSize(int)", 16);
-                QAxObject *lowerFlagInterior = lowerFlagRange->querySubObject("Interior");
-                Color = QColor("#FFF000");
-                BgrColor = rgbToBgr(Color);
-                lowerFlagInterior->dynamicCall("SetColor(int)", BgrColor);
-                // 5. 第二列B2~B5区域行标题，文本内容不变，字体格式改为12号等线，背景填充色改为#FFFF00
-                QAxObject *rowHeaderRange = worksheetExcel->querySubObject("Range(const QString&)", "B2:B5");
-                QAxObject *rowHeaderFont = rowHeaderRange->querySubObject("Font");
-                rowHeaderFont->dynamicCall("SetName(const QString&)", "等线");
-                rowHeaderFont->dynamicCall("SetSize(int)", 12);
-                QAxObject *rowHeaderInterior = rowHeaderRange->querySubObject("Interior");
-                Color = QColor("#FFF000");
-                BgrColor = rgbToBgr(Color);
-                rowHeaderInterior->dynamicCall("SetColor(int)", BgrColor);
-                // 复制行标题到 Excel
-                for (int row = 0; row < ui->worksheet->rowCount(); ++row) {
-                    QString rowHeaderText = ui->worksheet->verticalHeaderItem(row)->text();
-                    QAxObject *cell = worksheetExcel->querySubObject("Cells(int,int)", row + 2, 2); // 从第二行第二列写行标题
-                    cell->dynamicCall("SetValue(const QVariant&)", rowHeaderText);
-                }
-                // 复制表格数据到 Excel，从第二行第三列开始
-                for (int row = 0; row < ui->worksheet->rowCount(); ++row) {
-                    for (int col = 0; col < ui->worksheet->columnCount(); ++col) {
-                        QTableWidgetItem *item = ui->worksheet->item(row, col);
-                        if (item) {
-                            QAxObject *cell = worksheetExcel->querySubObject("Cells(int,int)", row + 2, col + 3);
-                            cell->dynamicCall("SetValue(const QVariant&)", item->text());
-                        }
+                // 处理事件，让进度对话框有机会更新
+                if (i % 10 == 0) { // 每10行处理一次事件
+                    QApplication::processEvents();
+                    if (exportProgress->wasCanceled()) { // 虽然移除了取消按钮，但仍可检查状态
+                        break;
                     }
                 }
-                // // 6. A1~G5矩阵区域设置粗外侧框线
-                QAxObject *allBorders = allRange->querySubObject("Borders");
-                if (allBorders) {
-                    // 设置边框样式为连续线条
-                    allBorders->dynamicCall("LineStyle", 1); // xlContinuous
-                    // 设置边框粗细为粗线
-                    allBorders->dynamicCall("Weight", 2);    // xlThick
-                    delete allBorders;
-                }
-                //C1~G1区域、B2~B5区域、A2和A3的合并区域、A4和A5的合并区域分别设置为所有框线
-                QAxObject *headerBorders = headerRange->querySubObject("Borders");
-                headerBorders->dynamicCall("LineStyle", 1); // xlContinuous
-                QAxObject *rowHeaderBorders = rowHeaderRange->querySubObject("Borders");
-                rowHeaderBorders->dynamicCall("LineStyle", 1); // xlContinuous
-                QAxObject *riseFlagBorders = riseFlagRange->querySubObject("Borders");
-                riseFlagBorders->dynamicCall("LineStyle", 1); // xlContinuous
-                QAxObject *lowerFlagBorders = lowerFlagRange->querySubObject("Borders");
-                lowerFlagBorders->dynamicCall("LineStyle", 1); // xlContinuous
-                // 7. A列宽110像素，B列宽175像素，C~G列宽350像素，1~5行高全部设置为65像素
-                // 两者计量单位不同，需要计算后转换
-                QAxObject *columnA = worksheetExcel->querySubObject("Columns(const QString&)", "A");
-                columnA->dynamicCall("ColumnWidth", 8);
-                QAxObject *columnB = worksheetExcel->querySubObject("Columns(const QString&)", "B");
-                columnB->dynamicCall("ColumnWidth", 14);
-                QAxObject *columnsCToG = worksheetExcel->querySubObject("Range(const QString&)", "C:G");
-                columnsCToG->dynamicCall("ColumnWidth", 28);
-                QAxObject *rows1To5 = worksheetExcel->querySubObject("Range(const QString&)", "1:5");
-                rows1To5->dynamicCall("RowHeight", 32.5);
-                // 调整列宽以适应内容（可根据需要保留或移除）
-                // QAxObject *usedRange = worksheetExcel->querySubObject("UsedRange");
-                // usedRange->querySubObject("Columns")->dynamicCall("AutoFit()");
-                // 保存并关闭 Excel 文件
-                // 将工作簿保存到用户指定的路径
-                workbook->dynamicCall("SaveAs(const QString&)", QDir::toNativeSeparators(filePath));
-                // 关闭工作簿
-                workbook->dynamicCall("Close()");
             }
-            // 退出 Excel 应用程序
-            excel->dynamicCall("Quit()");
-            // 释放 Excel 应用程序对象的内存
-            delete excel;
-            // 显示导出结果提示
-            QMessageBox::information(this, "导出成功", "表格已成功导出到指定位置。");
-        } else {
-            // 显示导出结果提示
-            QMessageBox::critical(this, "导出失败", "无法启动 Excel 应用程序，请确保已安装 Excel。");
-        }
-    }
-}
-void SystemWindow::onTotalTimesRuleClicked() {
-    // 总次数规则按钮，选定或取消选定
-    if (manager) {
-        manager->setUseTotalTimesRule(ui->times_rule->isChecked());
-    }
-}
+            // 调整列宽以适应内容
+            QAxObject *usedRange = statsSheet->querySubObject("UsedRange");
+            usedRange->querySubObject("Columns")->dynamicCall("AutoFit()");
 
-void SystemWindow::onRadioButtonClicked()
-{
-    // 当单选按钮被点击时，更新交接规则信息
-    if (manager) {
-        if (ui->Monday_handover_rule_radioButton->isChecked()) {
-            manager->setHandoverRule(SchedulingManager::MondayHandoverRule);
-        } else if (ui->All_handover_rule_radioButton->isChecked()) {
-            manager->setHandoverRule(SchedulingManager::AllHandoverRule);
-        } else if (ui->No_handover_rule_radioButton->isChecked()) {
-            manager->setHandoverRule(SchedulingManager::NoRule);
+            processStep("写入统计信息", exportProgress);
+
+
+            // ========== 第二个工作表：排班表 ==========
+            QAxObject *worksheets = workbook->querySubObject("Worksheets");
+            worksheets->dynamicCall("Add()"); // 添加新工作表
+            QAxObject *worksheetExcel = workbook->querySubObject("Worksheets(int)", 1);
+            worksheetExcel->dynamicCall("SetName(const QString&)", "排班表");
+
+            processStep("创建排班表", exportProgress);
+
+            // 1. 所有拥有文字的区域（A1~G5矩阵区域）都应该居中对齐
+            QAxObject *allRange = worksheetExcel->querySubObject("Range(const QString&)", "A1:G5");
+            allRange->setProperty("HorizontalAlignment", -4108); // 直接设置属性
+            // 2. 第一行列标题C1~G1区域，文本内容不变，字体格式改为16号黑体，背景填充色改为#FFC000
+            QAxObject *headerRange = worksheetExcel->querySubObject("Range(const QString&)", "C1:G1");
+            QAxObject *headerFont = headerRange->querySubObject("Font");
+            headerFont->dynamicCall("SetName(const QString&)", "黑体");
+            headerFont->dynamicCall("SetSize(int)", 16);
+            QAxObject *headerInterior = headerRange->querySubObject("Interior");
+            QColor Color("#FFC000");
+            int BgrColor = rgbToBgr(Color);
+            headerInterior->dynamicCall("SetColor(int)", BgrColor);
+            // 复制列标题到 Excel
+            for (int col = 0; col < ui->worksheet->columnCount(); ++col) {
+                QString headerText = ui->worksheet->horizontalHeaderItem(col)->text();
+                QAxObject *cell = worksheetExcel->querySubObject("Cells(int,int)", 1, col + 3); // 从第一行第三列开始写列标题
+                cell->dynamicCall("SetValue(const QVariant&)", headerText);
+            }
+            processStep("设置表头格式", exportProgress);
+            // 3. 第一列A2和A3区域合并，并输入“升旗”文本，字体格式改为16号黑体，背景填充色改为#FFFF00
+            // 两者使用的颜色单位不同，不能直接转换需要rgb to bgr的操作
+            QAxObject *riseFlagRange = worksheetExcel->querySubObject("Range(const QString&)", "A2:A3");
+            riseFlagRange->dynamicCall("Merge()");
+            QAxObject *riseFlagCell = worksheetExcel->querySubObject("Cells(int,int)", 2, 1);
+            riseFlagCell->dynamicCall("SetValue(const QVariant&)", "升旗");
+            QAxObject *riseFlagFont = riseFlagRange->querySubObject("Font");
+            riseFlagFont->dynamicCall("SetName(const QString&)", "黑体");
+            riseFlagFont->dynamicCall("SetSize(int)", 16);
+            QAxObject *riseFlagInterior = riseFlagRange->querySubObject("Interior");
+            Color = QColor("#FFF000");
+            BgrColor = rgbToBgr(Color);
+            riseFlagInterior->dynamicCall("SetColor(int)", BgrColor);
+            processStep("设置升旗区域", exportProgress);
+            // 4. 第一列A4和A5区域合并，并输入“降旗”文本，字体格式改为16号黑体，背景填充色改为#FFFF00
+            QAxObject *lowerFlagRange = worksheetExcel->querySubObject("Range(const QString&)", "A4:A5");
+            lowerFlagRange->dynamicCall("Merge()");
+            QAxObject *lowerFlagCell = worksheetExcel->querySubObject("Cells(int,int)", 4, 1);
+            lowerFlagCell->dynamicCall("SetValue(const QVariant&)", "降旗");
+            QAxObject *lowerFlagFont = lowerFlagRange->querySubObject("Font");
+            lowerFlagFont->dynamicCall("SetName(const QString&)", "黑体");
+            lowerFlagFont->dynamicCall("SetSize(int)", 16);
+            QAxObject *lowerFlagInterior = lowerFlagRange->querySubObject("Interior");
+            Color = QColor("#FFF000");
+            BgrColor = rgbToBgr(Color);
+            lowerFlagInterior->dynamicCall("SetColor(int)", BgrColor);
+            processStep("设置降旗区域", exportProgress);
+            // 5. 第二列B2~B5区域行标题，文本内容不变，字体格式改为12号等线，背景填充色改为#FFFF00
+            QAxObject *rowHeaderRange = worksheetExcel->querySubObject("Range(const QString&)", "B2:B5");
+            QAxObject *rowHeaderFont = rowHeaderRange->querySubObject("Font");
+            rowHeaderFont->dynamicCall("SetName(const QString&)", "等线");
+            rowHeaderFont->dynamicCall("SetSize(int)", 12);
+            QAxObject *rowHeaderInterior = rowHeaderRange->querySubObject("Interior");
+            Color = QColor("#FFF000");
+            BgrColor = rgbToBgr(Color);
+            rowHeaderInterior->dynamicCall("SetColor(int)", BgrColor);
+            processStep("设置行标题", exportProgress);
+            // 复制行标题到 Excel
+            for (int row = 0; row < ui->worksheet->rowCount(); ++row) {
+                QString rowHeaderText = ui->worksheet->verticalHeaderItem(row)->text();
+                QAxObject *cell = worksheetExcel->querySubObject("Cells(int,int)", row + 2, 2); // 从第二行第二列写行标题
+                cell->dynamicCall("SetValue(const QVariant&)", rowHeaderText);
+            }
+            // 复制表格数据到 Excel，从第二行第三列开始
+            for (int row = 0; row < ui->worksheet->rowCount(); ++row) {
+                for (int col = 0; col < ui->worksheet->columnCount(); ++col) {
+                    QTableWidgetItem *item = ui->worksheet->item(row, col);
+                    if (item) {
+                        QAxObject *cell = worksheetExcel->querySubObject("Cells(int,int)", row + 2, col + 3);
+                        cell->dynamicCall("SetValue(const QVariant&)", item->text());
+                    }
+                }
+            }
+            processStep("复制表格数据", exportProgress);
+            // // 6. A1~G5矩阵区域设置粗外侧框线
+            QAxObject *allBorders = allRange->querySubObject("Borders");
+            if (allBorders) {
+                // 设置边框样式为连续线条
+                allBorders->dynamicCall("LineStyle", 1); // xlContinuous
+                // 设置边框粗细为粗线
+                allBorders->dynamicCall("Weight", 2);    // xlThick
+                delete allBorders;
+            }
+            //C1~G1区域、B2~B5区域、A2和A3的合并区域、A4和A5的合并区域分别设置为所有框线
+            QAxObject *headerBorders = headerRange->querySubObject("Borders");
+            headerBorders->dynamicCall("LineStyle", 1); // xlContinuous
+            QAxObject *rowHeaderBorders = rowHeaderRange->querySubObject("Borders");
+            rowHeaderBorders->dynamicCall("LineStyle", 1); // xlContinuous
+            QAxObject *riseFlagBorders = riseFlagRange->querySubObject("Borders");
+            riseFlagBorders->dynamicCall("LineStyle", 1); // xlContinuous
+            QAxObject *lowerFlagBorders = lowerFlagRange->querySubObject("Borders");
+            lowerFlagBorders->dynamicCall("LineStyle", 1); // xlContinuous
+            processStep("设置表格边框", exportProgress);
+            // 7. A列宽110像素，B列宽175像素，C~G列宽350像素，1~5行高全部设置为65像素
+            // 两者计量单位不同，需要计算后转换
+            QAxObject *columnA = worksheetExcel->querySubObject("Columns(const QString&)", "A");
+            columnA->dynamicCall("ColumnWidth", 8);
+            QAxObject *columnB = worksheetExcel->querySubObject("Columns(const QString&)", "B");
+            columnB->dynamicCall("ColumnWidth", 14);
+            QAxObject *columnsCToG = worksheetExcel->querySubObject("Range(const QString&)", "C:G");
+            columnsCToG->dynamicCall("ColumnWidth", 28);
+            QAxObject *rows1To5 = worksheetExcel->querySubObject("Range(const QString&)", "1:5");
+            rows1To5->dynamicCall("RowHeight", 32.5);
+            processStep("设置表格格式", exportProgress);
+            // 保存并关闭 Excel 文件
+            // 将工作簿保存到用户指定的路径
+            workbook->dynamicCall("SaveAs(const QString&)", QDir::toNativeSeparators(filePath));
+            // 关闭工作簿
+            workbook->dynamicCall("Close()");
+            processStep("保存工作簿", exportProgress);
         }
+        // 退出 Excel 应用程序
+        excel->dynamicCall("Quit()");
+        // 释放 Excel 应用程序对象的内存
+        delete excel;
+    }
+
+
+    // 导出完成后恢复控件状态并提示
+    if (exportProgress) {
+        exportProgress->hide();
+    }
+    QMessageBox::information(this, "导出完成", "表格已成功导出至：\n" + filePath, QMessageBox::Ok);
+
+}
+// 自定义进度更新函数
+void SystemWindow::processStep(const QString& stepName, QProgressDialog* progress) {
+    if (progress && progress->isVisible()) {
+        progress->setLabelText("正在导出表格 - " + stepName + "...");
+        QApplication::processEvents();
     }
 }
-
 
 
 //队员管理界面函数实现
@@ -479,7 +570,7 @@ void SystemWindow::onGroupAddButtonClicked(int groupIndex)
     case 4: isChecked = ui->group4_iswork_radioButton->isChecked(); break;
     } 
     bool time[4][5];
-    //初始化所有执勤时间，默认为全部可以执勤
+    //初始化所有执勤时间，默认为全部不可以执勤
     for (int i = 0; i < 4; ++i) {
         for (int g = 0; g < 5; ++g) {
             time[i][g] = false;
@@ -506,7 +597,7 @@ void SystemWindow::onGroupAddButtonClicked(int groupIndex)
         defaultName = defaultNameBase + std::to_string(counter);
     }
     //初始化新队员的基础信息
-    Person person(defaultName, false, groupIndex, "", "", "", "", "", "", "", isChecked, time, 0, 0);
+    Person person(defaultName, false, groupIndex, 1, "", "", "", "", "", "", "", isChecked, time, 0, 0);
     //向flagGroup中添加新队员
     flagGroup.addPersonToGroup(person, groupIndex);
     //更新对应组的ListView组员标签信息
@@ -536,8 +627,37 @@ void SystemWindow::onGroupDeleteButtonClicked(int groupIndex)
         const auto& members = flagGroup.getGroupMembers(groupIndex);
         if (static_cast<std::vector<Person>::size_type>(row) < members.size()) {
             const Person& personToRemove = members[row];
+            // 检查删除的是否是当前显示的队员
+            if (currentSelectedPerson && *currentSelectedPerson == personToRemove) {
+                clearMemberInfoDisplay(); // 清空信息显示区
+                currentSelectedPerson = nullptr; // 重置当前选中队员指针
+            }
             flagGroup.removePersonFromGroup(personToRemove, groupIndex);// 调用 Flag_group 的删除成员方法
             updateListView(groupIndex);//更新对应组的ListView组员标签信息
+        }
+    }
+}
+// 新增的清空信息显示区函数
+void SystemWindow::clearMemberInfoDisplay()
+{
+    ui->name_lineEdit->clear();
+    ui->phone_lineEdit->clear();
+    ui->nativePlace_lineEdit->clear();
+    ui->school_lineEdit->clear();
+    ui->native_lineEdit->clear();
+    ui->dorm_lineEdit->clear();
+    ui->class_lineEdit->clear();
+    ui->birthday_lineEdit->clear();
+    ui->gender_combobox->setCurrentIndex(0);
+    ui->grade_comboBox->setCurrentIndex(0);
+    ui->group_combobox->setCurrentIndex(0);
+    ui->total_times_spinBox->setValue(0);
+
+    // 清空执勤时间按钮状态
+    QList<QAbstractButton*> attendanceButtons = ui->availableTime_groupBox->findChildren<QAbstractButton*>();
+    for (QAbstractButton* button : attendanceButtons) {
+        if (!button->objectName().endsWith("all_pushButton")) {
+            button->setChecked(false);
         }
     }
 }
@@ -634,6 +754,10 @@ void SystemWindow::updateListView(int groupIndex)
     QStringListModel *model = new QStringListModel();//创建一个 QStringListModel 对象 model，它是 QAbstractItemModel 的子类，专门用于处理字符串列表数据
     model->setStringList(memberNames);//调用 model 的 setStringList 方法，将 memberNames 列表中的数据设置到模型中。
     listView->setModel(model);//调用 listView 的 setModel 方法，将 model 设置为 listView 的数据模型。这样，listView 就会显示 model 中的数据，即指定组别的队员姓名。
+    // 关键设置：禁用所有编辑触发，但保留点击功能
+    listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    // 可选：设置选择模式，允许点击选择
+    listView->setSelectionMode(QAbstractItemView::SingleSelection);
 }
 void SystemWindow::showMemberInfo(const Person &person)
 {
@@ -647,7 +771,9 @@ void SystemWindow::showMemberInfo(const Person &person)
     ui->class_lineEdit->setText(QString::fromStdString(person.getClassname()));
     ui->birthday_lineEdit->setText(QString::fromStdString(person.getBirthday()));
     ui->gender_combobox->setCurrentText(person.getGender() ? "女" : "男");
+    ui->grade_comboBox->setCurrentIndex(person.getGrade() - 1);//grade_combobox默认以0开始，与年级最小为1相违背
     ui->group_combobox->setCurrentIndex(person.getGroup() - 1);//group_combobox默认以0开始，与组名最小为1相违背
+    ui->total_times_spinBox->setValue(person.getAll_times());
 }
 void SystemWindow::updatePersonInfo(const Person &person)
 {
@@ -662,6 +788,8 @@ void SystemWindow::updatePersonInfo(const Person &person)
     QString classname = ui->class_lineEdit->text();
     QString birthday = ui->birthday_lineEdit->text();
     bool gender = ui->gender_combobox->currentText() == "女";
+    int grade = ui->grade_comboBox->currentIndex() + 1;
+    int all_times = ui->total_times_spinBox->value();
     // 创建新的 Person 对象
     bool time[4][5];
     //time 数组保持不变
@@ -670,10 +798,10 @@ void SystemWindow::updatePersonInfo(const Person &person)
             time[i][j] = person.getTime(i + 1, j + 1);
         }
     }
-    Person newPerson(name.toStdString(), gender, person.getGroup(), phone.toStdString(),
+    Person newPerson(name.toStdString(), gender, person.getGroup(), grade, phone.toStdString(),
                      nativePlace.toStdString(), native.toStdString(), dorm.toStdString(),
                      school.toStdString(), classname.toStdString(), birthday.toStdString(), person.getIsWork(),
-                     time, person.getTimes(), person.getAll_times());
+                     time, person.getTimes(), all_times);
     // 更新 flagGroup 中对应队员的信息
     flagGroup.modifyPersonInGroup(person, newPerson, person.getGroup());
     // 更新对应组的 ListView 显示

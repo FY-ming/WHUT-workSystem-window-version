@@ -148,3 +148,12 @@ const vector<Person>& Flag_group::getGroupMembers(int groupNumber) const
         return emptyGroup;
     }
 }
+// 判断整个国旗班是否为空（所有组都没有成员）
+bool Flag_group::isEmpty() const {
+    for (int i = 0; i < 4; ++i) {
+        if (!group[i].empty()) {
+            return false;
+        }
+    }
+    return true;
+}

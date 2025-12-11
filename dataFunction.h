@@ -5,7 +5,7 @@
 // scheduleTable索引全都参照下面的表格结构
 // 表格结构大致如下
 //          ||        周一         ||        周二         ||        周三        ||        周四         ||        周五         ||
-//      |南鉴湖升旗 ||slot:0   location:0 || slot:2   location:0||slot:4   location:0 ||slot:6   location:0 ||slot:8   location:0 ||
+//      |南鉴湖升旗 ||slot:0   location:0 ||slot:2   location:0 ||slot:4   location:0 ||slot:6   location:0 ||slot:8   location:0 ||
 // 升旗  --------------------------------------------------------------------------------------------------------------------------
 //      |东西院升旗 ||slot:0   location:1 ||slot:2   location:1 ||slot:4   location:1 ||slot:6   location:1 ||slot:8   location:1 ||
 // -------------------------------------------------------------------------------------------------------------------------------

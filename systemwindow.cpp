@@ -9,6 +9,10 @@
 #include <QFileDialog>
 #include <QAxObject>
 #include <QProgressDialog>
+#include <QTextStream>
+#include <QApplication>
+#include <QFileInfo>
+#include <QDir>
 #include "systemwindow.h"
 #include "fileFunction.h"
 #include "dataFunction.h"
@@ -37,6 +41,7 @@ SystemWindow::SystemWindow(QWidget *parent)
     connect(ui->clearButton, &QPushButton::clicked, this, &SystemWindow::onClearButtonClicked); // 撤销操作按钮点击事件
     connect(ui->alterButton, &QPushButton::clicked, this, &SystemWindow::onResetButtonClicked); // 重置队员执勤总次数按钮点击事件
     connect(ui->deriveButton, &QPushButton::clicked, this, &SystemWindow::onExportButtonClicked); // 导出表格按钮点击事件
+    connect(ui->importTimeFromTask_pushButton, &QPushButton::clicked, this, &SystemWindow::onImportTimeFromTaskButtonClicked); // 导入空闲时间按钮点击事件
     // 导出表格、撤销操作在初始时取消交互
     ui->deriveButton->setEnabled(false);
     ui->clearButton->setEnabled(false);
@@ -64,10 +69,14 @@ SystemWindow::SystemWindow(QWidget *parent)
             member.setIsWork(true); // 修改iswork信息
         }
     }
-    // 设置 availableTime_groupBox 中除“全选”按钮外的按钮为 checkable
+    // 设置 availableTime_groupBox 中除"全选"、"导入空闲时间"、"全部可用"、"全部不可用"按钮外的按钮为 checkable
     QList<QAbstractButton*> buttons = ui->availableTime_groupBox->findChildren<QAbstractButton*>();
     for (QAbstractButton* button : buttons) {
-        if (!button->text().contains("全选")) {
+        QString buttonText = button->text();
+        if (!buttonText.contains("全选") && 
+            buttonText != "导入空闲时间" && 
+            buttonText != "全部可用" && 
+            buttonText != "全部不可用") {
             button->setCheckable(true);
         }
     }
@@ -136,8 +145,10 @@ SystemWindow::SystemWindow(QWidget *parent)
     connect(ui->thursday_down_DXY_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->thursday_down_DXY_pushButton);});
     connect(ui->friday_down_NJH_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->friday_down_NJH_pushButton);});
     connect(ui->friday_down_DXY_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->friday_down_DXY_pushButton);});
-    // 连接是否执勤按钮的信号与槽
-    connect(ui->isWork_pushButton, &QPushButton::clicked, this, &SystemWindow::onIsWorkPushButtonClicked);
+    // 连接批量操作按钮的信号与槽
+    connect(ui->importTime_pushButton, &QPushButton::clicked, this, &SystemWindow::onImportTimeButtonClicked);
+    connect(ui->setAllAvailable_pushButton, &QPushButton::clicked, this, &SystemWindow::onSetAllAvailableButtonClicked);
+    connect(ui->setAllUnavailable_pushButton, &QPushButton::clicked, this, &SystemWindow::onSetAllUnavailableButtonClicked);
 }
 SystemWindow::~SystemWindow()
 {
@@ -929,31 +940,321 @@ void SystemWindow::onAllSelectButtonClicked()
         }
     }
 }
-void SystemWindow::onIsWorkPushButtonClicked()
+// 从CSV或Excel文件导入空闲时间
+void SystemWindow::onImportTimeButtonClicked()
 {
-    // 全选/清空按钮点击事件
-    // 切换所有出勤按钮的选中状态，并更新 Person 的 time 数组。
-    static bool isAllChecked = false;// 一次创建，全局生命周期，第一次点击实现全选功能
-    isAllChecked = !isAllChecked;
-    // 获取 availableTime_groupBox 中的所有按钮
-    QList<QAbstractButton*> attendanceButtons = ui->availableTime_groupBox->findChildren<QAbstractButton*>();
-    // 遍历所有按钮，设置选中状态
-    for (QAbstractButton* button : attendanceButtons) {
-        // 排除以 all_pushButton 结尾的全选按钮
-        if (!button->objectName().endsWith("all_pushButton")) {
-            button->setChecked(isAllChecked);
-        }
+    QString filePath = QFileDialog::getOpenFileName(this, "导入空闲时间", "", 
+        "支持的文件 (*.csv *.xlsx *.xls);;CSV 文件 (*.csv);;Excel 文件 (*.xlsx *.xls)");
+    if (filePath.isEmpty()) {
+        return;
     }
-    // 调用当前选中的队员信息
-    Person* person = currentSelectedPerson;
-    if (person) {
-        // 根据 isAllChecked 更新 time 数组
-        bool newTime[4][5];
-        for (int i = 0; i < 4; ++i) {
-            for (int j = 0; j < 5; ++j) {
-                newTime[i][j] = isAllChecked;
+
+    int successCount = 0;
+    int failCount = 0;
+
+    // 根据文件扩展名判断文件类型
+    QString suffix = QFileInfo(filePath).suffix().toLower();
+    
+    if (suffix == "csv") {
+        // 处理CSV文件
+        QFile file(filePath);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QMessageBox::warning(this, "错误", "无法打开文件：" + filePath);
+            return;
+        }
+
+        QTextStream in(&file);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+        in.setCodec("UTF-8");
+#endif
+
+        // 跳过表头
+        if (!in.atEnd()) {
+            in.readLine();
+        }
+
+        // 读取数据
+        while (!in.atEnd()) {
+            QString line = in.readLine();
+            if (line.isEmpty()) continue;
+
+            QStringList parts = line.split(",");
+            if (parts.size() < 22) { // 姓名+组别+20个时间点
+                failCount++;
+                continue;
+            }
+
+            QString name = parts[0];
+            int group = parts[1].toInt();
+            if (group < 1 || group > 4) {
+                failCount++;
+                continue;
+            }
+
+            // 查找对应的队员
+            bool found = false;
+            auto& members = flagGroup.getGroupMembers(group);
+            for (auto& member : members) {
+                if (QString::fromStdString(member.getName()) == name) {
+                    // 读取时间安排
+                    bool time[4][5];
+                    for (int row = 0; row < 4; ++row) {
+                        for (int col = 0; col < 5; ++col) {
+                            int index = 2 + row * 5 + col;
+                            if (index < parts.size()) {
+                                time[row][col] = (parts[index].toInt() == 1);
+                            } else {
+                                time[row][col] = false;
+                            }
+                        }
+                    }
+                    member.setTime(time);
+                    found = true;
+                    successCount++;
+                    break;
+                }
+            }
+            if (!found) {
+                failCount++;
             }
         }
-        person->setTime(newTime);
+
+        file.close();
+    } else if (suffix == "xlsx" || suffix == "xls") {
+        // 处理Excel文件 - 显示进度提示
+        QProgressDialog *importProgress = new QProgressDialog(this);
+        importProgress->setWindowModality(Qt::ApplicationModal);
+        importProgress->setWindowFlags(importProgress->windowFlags() | Qt::WindowStaysOnTopHint);
+        importProgress->setCancelButton(nullptr);
+        importProgress->setMinimumDuration(0);
+        importProgress->setWindowTitle("导入进度");
+        importProgress->setLabelText("正在导入Excel文件，请稍候...");
+        importProgress->setRange(0, 0); // 不确定进度模式
+        importProgress->show();
+        QApplication::processEvents();
+
+        QAxObject *excel = new QAxObject("Excel.Application");
+        if (!excel || excel->isNull()) {
+            delete importProgress;
+            QMessageBox::warning(this, "错误", "无法启动Excel应用程序。请确保已安装Microsoft Excel。");
+            if (excel) delete excel;
+            return;
+        }
+
+        importProgress->setLabelText("正在连接Excel...");
+        QApplication::processEvents();
+
+        // 设置 Excel 应用程序不可见
+        excel->dynamicCall("SetVisible(bool)", false);
+        // 获取 Excel 应用程序的工作簿集合
+        importProgress->setLabelText("正在打开Excel文件...");
+        QApplication::processEvents();
+        
+        QAxObject *workbooks = excel->querySubObject("Workbooks");
+        if (!workbooks || workbooks->isNull()) {
+            delete importProgress;
+            excel->dynamicCall("Quit()");
+            delete excel;
+            QMessageBox::warning(this, "错误", "无法访问Excel工作簿集合。");
+            return;
+        }
+
+        // 打开Excel文件
+        QVariant openResult = workbooks->dynamicCall("Open(const QString&)", QDir::toNativeSeparators(filePath));
+        QAxObject *workbook = excel->querySubObject("ActiveWorkbook");
+        if (!workbook || workbook->isNull()) {
+            delete importProgress;
+            excel->dynamicCall("Quit()");
+            delete excel;
+            QMessageBox::warning(this, "错误", "无法打开Excel文件：" + filePath);
+            return;
+        }
+
+        importProgress->setLabelText("正在读取工作表数据...");
+        QApplication::processEvents();
+
+        // 获取第一个工作表
+        QAxObject *worksheet = workbook->querySubObject("Worksheets(int)", 1);
+        if (!worksheet || worksheet->isNull()) {
+            delete importProgress;
+            workbook->dynamicCall("Close(bool)", false);
+            excel->dynamicCall("Quit()");
+            delete excel;
+            QMessageBox::warning(this, "错误", "无法访问工作表。");
+            return;
+        }
+
+        // 获取已使用的范围
+        QAxObject *usedRange = worksheet->querySubObject("UsedRange");
+        if (!usedRange || usedRange->isNull()) {
+            delete importProgress;
+            delete worksheet;
+            workbook->dynamicCall("Close(bool)", false);
+            excel->dynamicCall("Quit()");
+            delete excel;
+            QMessageBox::warning(this, "错误", "工作表为空或无法读取。");
+            return;
+        }
+
+        // 获取行数和列数
+        QAxObject *rows = usedRange->querySubObject("Rows");
+        QAxObject *columns = usedRange->querySubObject("Columns");
+        int rowCount = rows ? rows->property("Count").toInt() : 0;
+        int colCount = columns ? columns->property("Count").toInt() : 0;
+
+        // 设置进度条范围（如果有数据行）
+        if (rowCount > 1) {
+            importProgress->setRange(0, rowCount - 1); // 减去表头行
+            importProgress->setValue(0);
+        }
+
+        // 从第二行开始读取数据（第一行是表头）
+        for (int row = 2; row <= rowCount; ++row) {
+            // 更新进度提示
+            int progress = row - 2; // 当前处理的行数（从0开始）
+            importProgress->setValue(progress);
+            importProgress->setLabelText(QString("正在导入第 %1/%2 条数据...").arg(progress + 1).arg(rowCount - 1));
+            QApplication::processEvents();
+
+            // 读取姓名（第1列，索引为1）
+            QAxObject *nameCell = worksheet->querySubObject("Cells(int,int)", row, 1);
+            QString name = nameCell ? nameCell->property("Value").toString() : "";
+            if (nameCell) delete nameCell;
+
+            // 读取组别（第2列，索引为2）
+            QAxObject *groupCell = worksheet->querySubObject("Cells(int,int)", row, 2);
+            int group = groupCell ? groupCell->property("Value").toInt() : 0;
+            if (groupCell) delete groupCell;
+
+            if (name.isEmpty() || group < 1 || group > 4) {
+                failCount++;
+                continue;
+            }
+
+            // 读取时间安排（第3列到第22列，共20个时间点）
+            bool time[4][5];
+            bool hasValidData = false;
+            for (int col = 3; col <= 22; ++col) {
+                QAxObject *timeCell = worksheet->querySubObject("Cells(int,int)", row, col);
+                QVariant cellValue = timeCell ? timeCell->property("Value") : QVariant(0);
+                int timeValue = cellValue.toInt();
+                if (timeCell) delete timeCell;
+
+                int timeIndex = col - 3; // 0-19
+                int rowIndex = timeIndex / 5; // 0-3
+                int colIndex = timeIndex % 5; // 0-4
+                time[rowIndex][colIndex] = (timeValue == 1);
+                if (timeValue == 0 || timeValue == 1) {
+                    hasValidData = true;
+                }
+            }
+
+            if (!hasValidData) {
+                failCount++;
+                continue;
+            }
+
+            // 查找对应的队员
+            bool found = false;
+            auto& members = flagGroup.getGroupMembers(group);
+            for (auto& member : members) {
+                if (QString::fromStdString(member.getName()) == name) {
+                    member.setTime(time);
+                    found = true;
+                    successCount++;
+                    break;
+                }
+            }
+            if (!found) {
+                failCount++;
+            }
+        }
+
+        importProgress->setLabelText("正在完成导入...");
+        QApplication::processEvents();
+
+        // 清理资源
+        importProgress->setLabelText("正在关闭Excel文件...");
+        QApplication::processEvents();
+        
+        if (rows) delete rows;
+        if (columns) delete columns;
+        delete usedRange;
+        delete worksheet;
+        workbook->dynamicCall("Close(bool)", false); // 不保存更改
+        delete workbook;
+        excel->dynamicCall("Quit()");
+        delete excel;
+        
+        // 关闭进度对话框
+        importProgress->close();
+        delete importProgress;
+    } else {
+        QMessageBox::warning(this, "错误", "不支持的文件格式：" + suffix);
+        return;
     }
+
+    // 更新当前显示的队员信息
+    if (currentSelectedPerson) {
+        updateAttendanceButtons(*currentSelectedPerson);
+    }
+
+    // 更新所有组的ListView
+    for (int i = 1; i <= 4; ++i) {
+        updateListView(i);
+    }
+
+    QString message = QString("导入完成！\n成功：%1 条\n失败：%2 条").arg(successCount).arg(failCount);
+    QMessageBox::information(this, "导入结果", message);
+}
+
+// 全部可用
+void SystemWindow::onSetAllAvailableButtonClicked()
+{
+    if (!currentSelectedPerson) {
+        QMessageBox::warning(this, "提示", "请先选择一个队员");
+        return;
+    }
+
+    // 设置所有时间为可用
+    bool time[4][5];
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 5; ++j) {
+            time[i][j] = true;
+        }
+    }
+    currentSelectedPerson->setTime(time);
+
+    // 更新UI显示
+    updateAttendanceButtons(*currentSelectedPerson);
+    QMessageBox::information(this, "成功", "已设置所有时间为可用");
+}
+
+// 全部不可用
+void SystemWindow::onSetAllUnavailableButtonClicked()
+{
+    if (!currentSelectedPerson) {
+        QMessageBox::warning(this, "提示", "请先选择一个队员");
+        return;
+    }
+
+    // 设置所有时间为不可用
+    bool time[4][5];
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 5; ++j) {
+            time[i][j] = false;
+        }
+    }
+    currentSelectedPerson->setTime(time);
+
+    // 更新UI显示
+    updateAttendanceButtons(*currentSelectedPerson);
+    QMessageBox::information(this, "成功", "已设置所有时间为不可用");
+}
+
+// 从表格管理界面导入空闲时间
+void SystemWindow::onImportTimeFromTaskButtonClicked()
+{
+    // 直接调用导入空闲时间函数
+    onImportTimeButtonClicked();
 }

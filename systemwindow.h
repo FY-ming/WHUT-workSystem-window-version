@@ -31,6 +31,7 @@ private slots:
     void onClearButtonClicked(); // 撤销操作按钮点击事件
     void onResetButtonClicked(); // 重置队员执勤总次数按钮点击事件
     void onExportButtonClicked(); // 导出表格按钮点击事件
+    void onImportTimeFromTaskButtonClicked(); // 导入空闲时间按钮点击事件（表格管理界面）
 
     // 制表警告
     void handleSchedulingWarning(const QString& warningMessage); // 排表过程中发送警告信息的对应处理函数
@@ -48,8 +49,10 @@ private slots:
 
     // 队员事件安排栏
     void onAttendanceButtonClicked(QAbstractButton *button); // 事件安排表中执勤按钮点击事件
-    void onIsWorkPushButtonClicked(); // 总全选/清空按钮点击事件
     void onAllSelectButtonClicked(); // 全选按钮点击事件
+    void onImportTimeButtonClicked(); // 导入空闲时间按钮点击事件
+    void onSetAllAvailableButtonClicked(); // 全部可用按钮点击事件
+    void onSetAllUnavailableButtonClicked(); // 全部不可用按钮点击事件
 
 private:
     Ui::SystemWindow *ui; // ui界面指针

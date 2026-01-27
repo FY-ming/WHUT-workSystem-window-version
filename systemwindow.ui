@@ -28,7 +28,7 @@
     <item>
      <widget class="QTabWidget" name="worksheet_tabWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="task">
        <attribute name="title">
@@ -133,6 +133,22 @@
                      </property>
                      <property name="text">
                       <string>导出表格</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="importTimeFromTask_pushButton">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="text">
+                      <string>导入空闲时间</string>
+                     </property>
+                     <property name="checkable">
+                      <bool>false</bool>
                      </property>
                     </widget>
                    </item>
@@ -1308,9 +1324,32 @@ li.checked::marker { content: &quot;\2612&quot;; }
                        </widget>
                       </item>
                       <item row="0" column="0">
-                       <widget class="QPushButton" name="isWork_pushButton">
+                       <widget class="QPushButton" name="importTime_pushButton">
                         <property name="text">
-                         <string>全选/清空</string>
+                         <string>导入空闲时间</string>
+                        </property>
+                        <property name="checkable">
+                         <bool>false</bool>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="0" column="1">
+                       <widget class="QPushButton" name="setAllAvailable_pushButton">
+                        <property name="text">
+                         <string>全部可用</string>
+                        </property>
+                        <property name="checkable">
+                         <bool>false</bool>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="0" column="2">
+                       <widget class="QPushButton" name="setAllUnavailable_pushButton">
+                        <property name="text">
+                         <string>全部不可用</string>
+                        </property>
+                        <property name="checkable">
+                         <bool>false</bool>
                         </property>
                        </widget>
                       </item>

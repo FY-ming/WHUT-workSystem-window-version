@@ -13,9 +13,11 @@
 #include <QApplication>
 #include <QFileInfo>
 #include <QDir>
+#include <QDebug>
 #include "systemwindow.h"
 #include "fileFunction.h"
 #include "dataFunction.h"
+#include "encryptedFileManager.h"
 
 Flag_group backupGroup; // 全局变量,用于撤销操作
 QString finalText_excel; // 全局变量，用于导出表格时输出统计的表格信息
@@ -32,8 +34,49 @@ SystemWindow::SystemWindow(QWidget *parent)
     // 将“使用说明”界面的 QTextEdit 文本框设置为只读模式
     ui->instructionText->setReadOnly(true);
 
-    // 在窗口启动时读取文件
-    FlagGroupFileManager::loadFromFile(flagGroup, filename);
+    // 在窗口启动时读取文件（优先使用加密格式，如果不存在则尝试旧格式）
+    QString encryptedFilename = filename;
+    encryptedFilename.replace(".txt", ".dat"); // 使用.dat扩展名表示加密文件
+    
+    // 确保data目录存在
+    QFileInfo fileInfo(filename);
+    QDir dir = fileInfo.absoluteDir();
+    if (!dir.exists()) {
+        dir.mkpath("."); // 创建目录
+    }
+    
+    // 尝试读取加密文件
+    bool loaded = false;
+    QFile encryptedFile(encryptedFilename);
+    if (encryptedFile.exists()) {
+        loaded = EncryptedFileManager::loadFromFile(flagGroup, encryptedFilename);
+        if (loaded) {
+            qDebug() << "成功从加密文件读取数据：" << encryptedFilename;
+        } else {
+            qDebug() << "加密文件读取失败，尝试读取旧格式：" << encryptedFilename;
+        }
+    } else {
+        qDebug() << "加密文件不存在，尝试读取旧格式：" << encryptedFilename;
+    }
+    
+    // 如果加密文件不存在或读取失败，尝试读取旧格式文件（向后兼容）
+    if (!loaded) {
+        QFile oldFile(filename);
+        if (oldFile.exists()) {
+            FlagGroupFileManager::loadFromFile(flagGroup, filename);
+            qDebug() << "从旧格式文件读取数据：" << filename;
+            // 如果旧文件存在，自动转换为新格式
+            EncryptedFileManager::saveToFile(flagGroup, encryptedFilename);
+            qDebug() << "已将旧格式转换为加密格式：" << encryptedFilename;
+        } else {
+            qDebug() << "数据文件不存在，使用空数据：" << filename;
+        }
+    }
+
+    // 刚启动时，内存中的数据与文件一致（或为空初始状态），认为没有未保存修改
+    dataSaved = true;
+    hasUnsavedChanges = false;
+    discardWithoutSave = false;
 
     // 执勤管理界面
     // 连接按钮和复选框的信号与槽
@@ -149,6 +192,9 @@ SystemWindow::SystemWindow(QWidget *parent)
     connect(ui->importTime_pushButton, &QPushButton::clicked, this, &SystemWindow::onImportTimeButtonClicked);
     connect(ui->setAllAvailable_pushButton, &QPushButton::clicked, this, &SystemWindow::onSetAllAvailableButtonClicked);
     connect(ui->setAllUnavailable_pushButton, &QPushButton::clicked, this, &SystemWindow::onSetAllUnavailableButtonClicked);
+    
+    // 连接应用程序退出信号，确保在任何情况下都能保存数据
+    connect(qApp, &QApplication::aboutToQuit, this, &SystemWindow::onApplicationAboutToQuit);
 }
 SystemWindow::~SystemWindow()
 {
@@ -158,17 +204,107 @@ SystemWindow::~SystemWindow()
 //关闭窗口事件
 void SystemWindow::closeEvent(QCloseEvent *event)
 {
-    // 弹出提示窗口
-    QMessageBox::StandardButton reply = QMessageBox::question(this, "关闭系统", "是否关闭系统？", QMessageBox::Yes | QMessageBox::No);
-    if (reply == QMessageBox::Yes) {
-        // 保存文件
-        FlagGroupFileManager::saveToFile(flagGroup, filename);
-        // 接受关闭事件
+    // 如果数据已经保存，直接关闭
+    if (dataSaved) {
+        event->accept();
+        return;
+    }
+    
+    // 弹出提示窗口，询问是否保存（按钮文字使用中文）
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("关闭系统");
+    msgBox.setText("检测到数据可能未保存，是否保存后关闭？");
+    msgBox.setInformativeText("如果选择“不保存”，本次修改的数据将会丢失。");
+    msgBox.setIcon(QMessageBox::Question);
+
+    // 使用自定义中文按钮
+    QPushButton *saveButton = msgBox.addButton("保存", QMessageBox::AcceptRole);
+    QPushButton *discardButton = msgBox.addButton("不保存", QMessageBox::DestructiveRole);
+    QPushButton *cancelButton = msgBox.addButton("取消", QMessageBox::RejectRole);
+    msgBox.setDefaultButton(saveButton);
+
+    msgBox.exec();
+
+    QAbstractButton *clicked = msgBox.clickedButton();
+    if (clicked == saveButton) {
+        // 保存并关闭
+        if (saveDataToFile()) {
+            event->accept();
+        } else {
+            // 保存失败，询问是否仍要关闭
+            QMessageBox::StandardButton retry = QMessageBox::question(
+                this,
+                "保存失败",
+                "无法保存数据文件！\n是否仍要关闭程序？\n（数据可能会丢失）",
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No
+            );
+            if (retry == QMessageBox::Yes) {
+                event->accept();
+            } else {
+                event->ignore();
+            }
+        }
+    } else if (clicked == discardButton) {
+        // 用户明确选择“不保存直接关闭”
+        discardWithoutSave = true;      // 后续 aboutToQuit 不再尝试自动保存
+        hasUnsavedChanges = false;      // 认为当前未保存修改已被放弃
+        dataSaved = false;             // 内存与文件不一致，但用户已同意放弃
         event->accept();
     } else {
-        // 忽略关闭事件，取消关闭行为
+        // 取消关闭或点击关闭按钮
         event->ignore();
     }
+}
+
+// 保存数据到文件
+bool SystemWindow::saveDataToFile()
+{
+    // 确保data目录存在
+    QString encryptedFilename = filename;
+    encryptedFilename.replace(".txt", ".dat");
+    
+    QFileInfo fileInfo(encryptedFilename);
+    QDir dir = fileInfo.absoluteDir();
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    
+    // 保存文件（使用加密格式）
+    bool saved = EncryptedFileManager::saveToFile(flagGroup, encryptedFilename);
+    
+    if (saved) {
+        dataSaved = true;
+        hasUnsavedChanges = false;   // 所有修改已写入文件
+        discardWithoutSave = false;  // 当前状态是“已保存”，不再视为放弃保存
+        qDebug() << "数据已保存：" << encryptedFilename;
+        return true;
+    } else {
+        qDebug() << "数据保存失败：" << encryptedFilename;
+        return false;
+    }
+}
+
+// 应用程序即将退出时的处理（作为最后保障）
+void SystemWindow::onApplicationAboutToQuit()
+{
+    // 如果存在未保存的修改，且用户没有明确选择“不保存”，尝试自动保存（静默保存，不显示对话框）
+    if (hasUnsavedChanges && !discardWithoutSave) {
+        qDebug() << "检测到程序即将退出，尝试自动保存数据...";
+        if (saveDataToFile()) {
+            qDebug() << "数据已自动保存";
+        } else {
+            qDebug() << "自动保存失败，数据可能丢失";
+        }
+    }
+}
+
+// 标记数据已被修改
+void SystemWindow::markDataChanged()
+{
+    hasUnsavedChanges = true;
+    dataSaved = false;
+    discardWithoutSave = false;
 }
 
 //值周管理界面函数实现
@@ -208,6 +344,8 @@ void SystemWindow::onTabulateButtonClicked() {
         QMessageBox::warning(nullptr,"排表错误警告","现在国旗班6个队员都凑不出来了吗:(");
     } else {
         manager->schedule();
+        // 排表会修改队员总次数等信息，属于需要保存的更改
+        markDataChanged();
     }
 }
 void SystemWindow::updateTableWidget(const SchedulingManager& manager) {
@@ -332,6 +470,8 @@ void SystemWindow::onClearButtonClicked() {
     ui->deriveButton->setEnabled(false);
     ui->clearButton->setEnabled(false);
     ui->tabulateButton->setEnabled(true);
+    // 撤销操作也会改变当前数据状态
+    markDataChanged();
 }
 void SystemWindow::onResetButtonClicked() {
     //重置队员执勤次数按钮
@@ -344,6 +484,8 @@ void SystemWindow::onResetButtonClicked() {
     // 在 QTextEdit 中清空并输出提示语句
     ui->timesResult->clear();
     ui->timesResult->append("所有队员的执勤总次数已成功归零");
+    // 重置总次数属于需要保存的更改
+    markDataChanged();
 }
 // 导出表格颜色转换辅助函数
 int rgbToBgr(const QColor& color) {
@@ -613,6 +755,8 @@ void SystemWindow::onGroupAddButtonClicked(int groupIndex)
     flagGroup.addPersonToGroup(person, groupIndex);
     //更新对应组的ListView组员标签信息
     updateListView(groupIndex);
+    // 数据已发生更改
+    markDataChanged();
 }
 void SystemWindow::onGroupDeleteButtonClicked(int groupIndex)
 {
@@ -645,6 +789,8 @@ void SystemWindow::onGroupDeleteButtonClicked(int groupIndex)
             }
             flagGroup.removePersonFromGroup(personToRemove, groupIndex);// 调用 Flag_group 的删除成员方法
             updateListView(groupIndex);//更新对应组的ListView组员标签信息
+            // 数据已发生更改
+            markDataChanged();
         }
     }
 }
@@ -689,6 +835,8 @@ void SystemWindow::onGroupIsWorkRadioButtonClicked(int groupIndex)
     for (auto& member : const_cast<std::vector<Person>&>(members)) {
         member.setIsWork(isChecked);
     }
+    // 该组的是否值周状态已更改
+    markDataChanged();
 }
 void SystemWindow::onListViewItemClicked(const QModelIndex &index, int groupIndex)
 {
@@ -717,6 +865,8 @@ void SystemWindow::onInfoLineEditChanged()
     // 信息修改后更新 Flag_group 中队员的信息,不包括点击队员标签时显示队员信息时造成的修改
     if (currentSelectedPerson && !isShowingInfo) {
         updatePersonInfo(*currentSelectedPerson);
+        // 基础信息修改
+        markDataChanged();
     }
 }
 void SystemWindow::onGroupComboBoxChanged(int newGroupIndex)
@@ -742,6 +892,8 @@ void SystemWindow::onGroupComboBoxChanged(int newGroupIndex)
             flagGroup.removePersonFromGroup(*currentSelectedPerson, oldGroupIndex);// 从旧组中删除队员
             updateListView(oldGroupIndex);// 更新旧组组别信息
             currentSelectedPerson = person;// 更新当前选中的队员指针
+            // 组别发生变化
+            markDataChanged();
         }
     }
 }
@@ -888,6 +1040,8 @@ void SystemWindow::onAttendanceButtonClicked(QAbstractButton *button)
             int row = it.value().first;
             int column = it.value().second;
             currentPerson->setTime(row, column, button->isChecked());
+            // 出勤时间更改
+            markDataChanged();
         }
     }
 }
@@ -939,6 +1093,8 @@ void SystemWindow::onAllSelectButtonClicked()
             }
         }
     }
+    // 全选更改出勤时间
+    markDataChanged();
 }
 // 从CSV或Excel文件导入空闲时间
 void SystemWindow::onImportTimeButtonClicked()
@@ -1206,6 +1362,10 @@ void SystemWindow::onImportTimeButtonClicked()
 
     QString message = QString("导入完成！\n成功：%1 条\n失败：%2 条").arg(successCount).arg(failCount);
     QMessageBox::information(this, "导入结果", message);
+    // 若有成功导入的数据，则认为数据已更改
+    if (successCount > 0) {
+        markDataChanged();
+    }
 }
 
 // 全部可用
@@ -1228,6 +1388,8 @@ void SystemWindow::onSetAllAvailableButtonClicked()
     // 更新UI显示
     updateAttendanceButtons(*currentSelectedPerson);
     QMessageBox::information(this, "成功", "已设置所有时间为可用");
+    // 出勤时间更改
+    markDataChanged();
 }
 
 // 全部不可用
@@ -1250,6 +1412,8 @@ void SystemWindow::onSetAllUnavailableButtonClicked()
     // 更新UI显示
     updateAttendanceButtons(*currentSelectedPerson);
     QMessageBox::information(this, "成功", "已设置所有时间为不可用");
+    // 出勤时间更改
+    markDataChanged();
 }
 
 // 从表格管理界面导入空闲时间

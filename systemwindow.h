@@ -62,6 +62,9 @@ private:
     bool isShowingInfo = false; // 新增标志位，用于区分展示信息造成的文本框信息修改和用户主动填写造成的信息修改
     QString warningMessages; // 新增成员变量，用于保存警告信息
     QString filename = "./data/data.txt"; // 保存队员信息的文件名
+    bool dataSaved = false; // 标记当前数据是否已保存到文件
+    bool hasUnsavedChanges = false; // 标记是否存在未保存的修改
+    bool discardWithoutSave = false; // 标记用户是否选择“不保存直接退出”
 
 
     QProgressDialog* exportProgress = nullptr; // 进度对话框
@@ -81,5 +84,8 @@ private:
     void showMemberInfo(const Person &person); // 根据选中的队员向UI中展示队员基础信息
     void updatePersonInfo(const Person &person); // 从UI中获取更新后的信息，修改flag_group中队员信息，仅更新基础信息部分，执勤安排不调整（根据程序实际设计，队员组别信息修改不在该函数进行）。
     void updateAttendanceButtons(const Person &person); // 根据队员的time数组调整按钮显示的状态
+    bool saveDataToFile(); // 保存数据到文件
+    void onApplicationAboutToQuit(); // 应用程序即将退出时的处理
+    void markDataChanged(); // 标记数据已被修改
 };
 #endif // SYSTEMWINDOW_H

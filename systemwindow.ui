@@ -990,6 +990,15 @@ li.checked::marker { content: &quot;\2612&quot;; }
                       </item>
                       <item row="3" column="11">
                        <widget class="QSpinBox" name="total_times_spinBox">
+                        <property name="readOnly">
+                         <bool>true</bool>
+                        </property>
+                        <property name="buttonSymbols">
+                         <enum>QAbstractSpinBox::NoButtons</enum>
+                        </property>
+                        <property name="focusPolicy">
+                         <enum>Qt::NoFocus</enum>
+                        </property>
                         <property name="maximum">
                          <number>1000</number>
                         </property>

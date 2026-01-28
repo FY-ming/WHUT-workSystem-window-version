@@ -1114,7 +1114,8 @@ void SystemWindow::updatePersonInfo(const Person &person)
     QString birthday = ui->birthday_lineEdit->text();
     bool gender = ui->gender_combobox->currentText() == "女";
     int grade = ui->grade_comboBox->currentIndex() + 1;
-    int all_times = ui->total_times_spinBox->value();
+    // 总执勤次数不允许在“队员管理”界面手动修改，始终以当前队员数据为准
+    int all_times = person.getAll_times();
     // 创建新的 Person 对象
     bool time[4][5];
     //time 数组保持不变

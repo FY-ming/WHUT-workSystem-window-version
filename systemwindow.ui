@@ -7,13 +7,13 @@
     <x>0</x>
     <y>0</y>
     <width>850</width>
-    <height>620</height>
+    <height>600</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>850</width>
-    <height>620</height>
+    <height>600</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -65,7 +65,7 @@
                  <x>0</x>
                  <y>0</y>
                  <width>215</width>
-                 <height>512</height>
+                 <height>492</height>
                 </rect>
                </property>
                <attribute name="label">
@@ -478,7 +478,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                  <x>0</x>
                  <y>0</y>
                  <width>215</width>
-                 <height>464</height>
+                 <height>444</height>
                 </rect>
                </property>
                <attribute name="label">
@@ -530,7 +530,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                           <x>0</x>
                           <y>0</y>
                           <width>187</width>
-                          <height>385</height>
+                          <height>365</height>
                          </rect>
                         </property>
                         <layout class="QVBoxLayout" name="verticalLayout_6">
@@ -796,7 +796,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                     <x>0</x>
                     <y>0</y>
                     <width>576</width>
-                    <height>546</height>
+                    <height>526</height>
                    </rect>
                   </property>
                   <layout class="QVBoxLayout" name="verticalLayout_16">
@@ -1440,7 +1440,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
              <x>0</x>
              <y>0</y>
              <width>818</width>
-             <height>570</height>
+             <height>550</height>
             </rect>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout">

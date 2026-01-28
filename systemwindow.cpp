@@ -72,6 +72,13 @@ SystemWindow::SystemWindow(QWidget *parent)
         }
     }
 
+    // 排表历史记录：使用单独文件 ./data/schedule_history.dat，与队员数据分离
+    QString historyPath = QFileInfo(filename).absolutePath() + "/schedule_history.dat";
+    historyManager.setHistoryFilePath(historyPath);
+    if (historyManager.loadFromFile(historyPath)) {
+        qDebug() << "已加载排表历史记录：" << historyPath;
+    }
+
     // 刚启动时，内存中的数据与文件一致（或为空初始状态），认为没有未保存修改
     dataSaved = true;
     hasUnsavedChanges = false;
@@ -213,7 +220,7 @@ void SystemWindow::closeEvent(QCloseEvent *event)
     QMessageBox msgBox(this);
     msgBox.setWindowTitle("关闭系统");
     msgBox.setText("检测到数据可能未保存，是否保存后关闭？");
-    msgBox.setInformativeText("如果选择“不保存”，本次修改的数据将会丢失。");
+    msgBox.setInformativeText("如果选择“不保存”，本次修改的队员数据及排表历史记录将全部丢失。");
     msgBox.setIcon(QMessageBox::Question);
 
     // 使用自定义中文按钮
@@ -287,14 +294,21 @@ bool SystemWindow::saveDataToFile()
 // 应用程序即将退出时的处理（作为最后保障）
 void SystemWindow::onApplicationAboutToQuit()
 {
-    // 如果存在未保存的修改，且用户没有明确选择“不保存”，尝试自动保存（静默保存，不显示对话框）
-    if (hasUnsavedChanges && !discardWithoutSave) {
+    if (discardWithoutSave) {
+        // 用户已选择「不保存」：不写队员数据，不写排表历史；本次会话的修改全部丢弃
+        return;
+    }
+    // 未选择「不保存」：视情况保存队员数据，并始终保存排表历史
+    if (hasUnsavedChanges) {
         qDebug() << "检测到程序即将退出，尝试自动保存数据...";
         if (saveDataToFile()) {
             qDebug() << "数据已自动保存";
         } else {
             qDebug() << "自动保存失败，数据可能丢失";
         }
+    }
+    if (historyManager.saveToFile()) {
+        qDebug() << "排表历史已保存";
     }
 }
 

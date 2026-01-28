@@ -17,6 +17,7 @@
 
 #include <QObject>
 #include <QDebug>
+#include <QSet>
 #include <vector>
 #include <algorithm>
 #include <random>
@@ -85,6 +86,7 @@ public:
         // peoplePerLocation：每个工作地点需要的工作人员数量，这里是 3 人。
         // nullptr：初始时，每个排班位置都设置为 nullptr，表示尚未安排人员。
         scheduleTable.resize(totalSlots, std::vector<std::vector<Person*>>(locationsPerSlot, std::vector<Person*>(peoplePerLocation, nullptr)));
+        emittedWarningsThisRun.clear(); // 每次排表开始时清空去重集合
         for (int slot = 0; slot < totalSlots; ++slot) {
             //外层循环遍历工作时间段
             int day = slot / 2 + 1;//值为1~5。表示星期
@@ -130,6 +132,7 @@ private:
     bool useTotalTimesRule;
     ScheduleMode mode;
     int checkedPositions = 0;        // 记录所有周二上午南鉴湖岗位的筛选结果已检查的岗位数
+    QSet<QString> emittedWarningsThisRun; // 本轮排表已发出的警告（用于去重）
 
     void initializeAvailableMembers() {
         // 初始化辅助函数
@@ -155,7 +158,11 @@ private:
             // 复制可用人员列表并按总次数排序
             std::vector<Person*> candidates = availableMembers;
             if (candidates.empty()) { // 防御性检查
-                emit schedulingWarning("警告：没有可用的候选人员！");
+                const QString msg = "警告：没有可用的候选人员！";
+                if (!emittedWarningsThisRun.contains(msg)) {
+                    emittedWarningsThisRun.insert(msg);
+                    emit schedulingWarning(msg);
+                }
                 return nullptr;
             }
 
@@ -188,9 +195,13 @@ private:
                     checkedPositions++;
                     if(checkedPositions >= 3) {
                         // 所有有效候选人都不符合交接规则，发出警告
-                        emit schedulingWarning(QString::fromStdString(
+                        const QString msg = QString::fromStdString(
                             "警告：周二上午南鉴湖任务中，无法满足交接规则，放弃以确保表格完整。"
-                            ));
+                        );
+                        if (!emittedWarningsThisRun.contains(msg)) {
+                            emittedWarningsThisRun.insert(msg);
+                            emit schedulingWarning(msg);
+                        }
                     }
                 }
                 // 无论是否符合交接规则，都从所有有效候选人中随机选择
@@ -201,9 +212,13 @@ private:
             if (allValidCandidates.empty()) {
                 // 处理无有效候选人的情况
                 if ((mode != ScheduleMode::DXYMondayFriday) || ((location == 1) && (slot == 0 || slot == 9))) {
-                    emit schedulingWarning(QString::fromStdString(
+                    const QString msg = QString::fromStdString(
                         "警告：在 " + getTimeDescription(slot, location) + " 无法选出合适的人员进行排班。"
-                        ));
+                    );
+                    if (!emittedWarningsThisRun.contains(msg)) {
+                        emittedWarningsThisRun.insert(msg);
+                        emit schedulingWarning(msg);
+                    }
                 }
                 return nullptr;
             }
@@ -291,7 +306,7 @@ private:
             return false;
         }
 
-        // 计算当前任务中已有的女队员数量
+        // 计算当前任务（slot + location）中已有的女队员数量（按 location 统计）
         int femaleCount = 0;
         for (int pos = 0; pos < 3; ++pos) {
             if (scheduleTable[slot][location][pos] &&
@@ -300,7 +315,7 @@ private:
             }
         }
 
-        // 如果加入当前队员会使女队员数量达到3，则返回true
+        // 如果加入当前队员会使该任务女队员数量达到3，则返回true
         return (femaleCount + 1) >= 3;
     }
 

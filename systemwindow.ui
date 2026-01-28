@@ -7,13 +7,13 @@
     <x>0</x>
     <y>0</y>
     <width>850</width>
-    <height>570</height>
+    <height>620</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>850</width>
-    <height>570</height>
+    <height>620</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -65,7 +65,7 @@
                  <x>0</x>
                  <y>0</y>
                  <width>215</width>
-                 <height>462</height>
+                 <height>512</height>
                 </rect>
                </property>
                <attribute name="label">
@@ -162,8 +162,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>215</width>
-                 <height>462</height>
+                 <width>100</width>
+                 <height>30</height>
                 </rect>
                </property>
                <property name="minimumSize">
@@ -478,7 +478,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                  <x>0</x>
                  <y>0</y>
                  <width>215</width>
-                 <height>414</height>
+                 <height>464</height>
                 </rect>
                </property>
                <attribute name="label">
@@ -530,7 +530,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                           <x>0</x>
                           <y>0</y>
                           <width>187</width>
-                          <height>335</height>
+                          <height>385</height>
                          </rect>
                         </property>
                         <layout class="QVBoxLayout" name="verticalLayout_6">
@@ -796,7 +796,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                     <x>0</x>
                     <y>0</y>
                     <width>576</width>
-                    <height>496</height>
+                    <height>546</height>
                    </rect>
                   </property>
                   <layout class="QVBoxLayout" name="verticalLayout_16">
@@ -812,155 +812,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                       <string>队员信息</string>
                      </property>
                      <layout class="QGridLayout" name="gridLayout_4">
-                      <item row="1" column="1">
-                       <widget class="QLineEdit" name="phone_lineEdit"/>
-                      </item>
-                      <item row="1" column="9">
-                       <widget class="QLabel" name="grade_label">
-                        <property name="text">
-                         <string>年级</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item row="0" column="0">
-                       <widget class="QLabel" name="name_label">
-                        <property name="text">
-                         <string>姓名</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item row="1" column="11">
-                       <widget class="QComboBox" name="grade_comboBox">
-                        <item>
-                         <property name="text">
-                          <string>大一</string>
-                         </property>
-                        </item>
-                        <item>
-                         <property name="text">
-                          <string>大二</string>
-                         </property>
-                        </item>
-                        <item>
-                         <property name="text">
-                          <string>大三</string>
-                         </property>
-                        </item>
-                       </widget>
-                      </item>
-                      <item row="2" column="9">
-                       <widget class="QLabel" name="native_label">
-                        <property name="sizePolicy">
-                         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                          <horstretch>0</horstretch>
-                          <verstretch>0</verstretch>
-                         </sizepolicy>
-                        </property>
-                        <property name="text">
-                         <string>民族</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item row="0" column="8">
-                       <widget class="QComboBox" name="gender_combobox">
-                        <item>
-                         <property name="text">
-                          <string>男</string>
-                         </property>
-                        </item>
-                        <item>
-                         <property name="text">
-                          <string>女</string>
-                         </property>
-                        </item>
-                       </widget>
-                      </item>
-                      <item row="2" column="6">
-                       <widget class="QLabel" name="nativePlace_label">
-                        <property name="sizePolicy">
-                         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                          <horstretch>0</horstretch>
-                          <verstretch>0</verstretch>
-                         </sizepolicy>
-                        </property>
-                        <property name="text">
-                         <string>籍贯</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item row="1" column="8">
-                       <widget class="QLineEdit" name="birthday_lineEdit"/>
-                      </item>
-                      <item row="2" column="1">
-                       <widget class="QLineEdit" name="school_lineEdit"/>
-                      </item>
-                      <item row="3" column="8">
-                       <widget class="QLineEdit" name="dorm_lineEdit"/>
-                      </item>
-                      <item row="3" column="1">
-                       <widget class="QLineEdit" name="class_lineEdit"/>
-                      </item>
-                      <item row="1" column="6">
-                       <widget class="QLabel" name="birthday_label">
-                        <property name="text">
-                         <string>生日</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item row="0" column="1">
-                       <widget class="QLineEdit" name="name_lineEdit"/>
-                      </item>
-                      <item row="3" column="0">
-                       <widget class="QLabel" name="class_label">
-                        <property name="text">
-                         <string>班级</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item row="1" column="0">
-                       <widget class="QLabel" name="phone_label">
-                        <property name="text">
-                         <string>联系电话</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item row="3" column="6">
-                       <widget class="QLabel" name="dorm_label">
-                        <property name="sizePolicy">
-                         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                          <horstretch>0</horstretch>
-                          <verstretch>0</verstretch>
-                         </sizepolicy>
-                        </property>
-                        <property name="text">
-                         <string>宿舍</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item row="2" column="8">
-                       <widget class="QLineEdit" name="nativePlace_lineEdit"/>
-                      </item>
-                      <item row="0" column="9">
-                       <widget class="QLabel" name="group_label">
-                        <property name="text">
-                         <string>所属组别</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item row="2" column="0">
-                       <widget class="QLabel" name="school_label">
-                        <property name="text">
-                         <string>学院</string>
-                        </property>
-                       </widget>
-                      </item>
-                      <item row="0" column="6">
-                       <widget class="QLabel" name="gender_label">
-                        <property name="text">
-                         <string>性别</string>
-                        </property>
-                       </widget>
-                      </item>
                       <item row="0" column="11">
                        <widget class="QComboBox" name="group_combobox">
                         <item>
@@ -985,54 +836,28 @@ li.checked::marker { content: &quot;\2612&quot;; }
                         </item>
                        </widget>
                       </item>
-                      <item row="2" column="11">
-                       <widget class="QLineEdit" name="native_lineEdit"/>
-                      </item>
-                      <item row="3" column="11">
-                       <widget class="QSpinBox" name="total_times_spinBox">
-                        <property name="readOnly">
-                         <bool>true</bool>
+                      <item row="2" column="9">
+                       <widget class="QLabel" name="native_label">
+                        <property name="sizePolicy">
+                         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                          <horstretch>0</horstretch>
+                          <verstretch>0</verstretch>
+                         </sizepolicy>
                         </property>
-                        <property name="buttonSymbols">
-                         <enum>QAbstractSpinBox::NoButtons</enum>
-                        </property>
-                        <property name="focusPolicy">
-                         <enum>Qt::NoFocus</enum>
-                        </property>
-                        <property name="maximum">
-                         <number>1000</number>
-                        </property>
-                       </widget>
-                      </item>
-                      <item row="3" column="9">
-                       <widget class="QLabel" name="total_times_label">
                         <property name="text">
-                         <string>总执勤次数</string>
+                         <string>民族</string>
                         </property>
                        </widget>
                       </item>
-                      <item row="4" column="9">
-                       <widget class="QLabel" name="njh_total_times_label">
+                      <item row="0" column="6">
+                       <widget class="QLabel" name="gender_label">
                         <property name="text">
-                         <string>南鉴湖总次数</string>
+                         <string>性别</string>
                         </property>
                        </widget>
                       </item>
-                      <item row="4" column="11">
-                       <widget class="QSpinBox" name="njh_total_times_spinBox">
-                        <property name="readOnly">
-                         <bool>true</bool>
-                        </property>
-                        <property name="buttonSymbols">
-                         <enum>QAbstractSpinBox::NoButtons</enum>
-                        </property>
-                        <property name="focusPolicy">
-                         <enum>Qt::NoFocus</enum>
-                        </property>
-                        <property name="maximum">
-                         <number>1000</number>
-                        </property>
-                       </widget>
+                      <item row="1" column="8">
+                       <widget class="QLineEdit" name="birthday_lineEdit"/>
                       </item>
                       <item row="5" column="9">
                        <widget class="QLabel" name="dxy_total_times_label">
@@ -1041,16 +866,191 @@ li.checked::marker { content: &quot;\2612&quot;; }
                         </property>
                        </widget>
                       </item>
+                      <item row="2" column="8">
+                       <widget class="QLineEdit" name="nativePlace_lineEdit"/>
+                      </item>
+                      <item row="1" column="1">
+                       <widget class="QLineEdit" name="phone_lineEdit"/>
+                      </item>
+                      <item row="1" column="9">
+                       <widget class="QLabel" name="grade_label">
+                        <property name="text">
+                         <string>年级</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="1" column="0">
+                       <widget class="QLabel" name="phone_label">
+                        <property name="text">
+                         <string>联系电话</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="2" column="1">
+                       <widget class="QLineEdit" name="school_lineEdit"/>
+                      </item>
+                      <item row="2" column="0">
+                       <widget class="QLabel" name="school_label">
+                        <property name="text">
+                         <string>学院</string>
+                        </property>
+                       </widget>
+                      </item>
                       <item row="5" column="11">
                        <widget class="QSpinBox" name="dxy_total_times_spinBox">
+                        <property name="focusPolicy">
+                         <enum>Qt::FocusPolicy::NoFocus</enum>
+                        </property>
                         <property name="readOnly">
                          <bool>true</bool>
                         </property>
                         <property name="buttonSymbols">
-                         <enum>QAbstractSpinBox::NoButtons</enum>
+                         <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
                         </property>
+                        <property name="maximum">
+                         <number>1000</number>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="2" column="6">
+                       <widget class="QLabel" name="nativePlace_label">
+                        <property name="sizePolicy">
+                         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                          <horstretch>0</horstretch>
+                          <verstretch>0</verstretch>
+                         </sizepolicy>
+                        </property>
+                        <property name="text">
+                         <string>籍贯</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="0" column="0">
+                       <widget class="QLabel" name="name_label">
+                        <property name="text">
+                         <string>姓名</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="3" column="6">
+                       <widget class="QLabel" name="dorm_label">
+                        <property name="sizePolicy">
+                         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                          <horstretch>0</horstretch>
+                          <verstretch>0</verstretch>
+                         </sizepolicy>
+                        </property>
+                        <property name="text">
+                         <string>宿舍</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="1" column="6">
+                       <widget class="QLabel" name="birthday_label">
+                        <property name="text">
+                         <string>生日</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="3" column="0">
+                       <widget class="QLabel" name="class_label">
+                        <property name="text">
+                         <string>班级</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="0" column="1">
+                       <widget class="QLineEdit" name="name_lineEdit"/>
+                      </item>
+                      <item row="2" column="11">
+                       <widget class="QLineEdit" name="native_lineEdit"/>
+                      </item>
+                      <item row="0" column="8">
+                       <widget class="QComboBox" name="gender_combobox">
+                        <item>
+                         <property name="text">
+                          <string>男</string>
+                         </property>
+                        </item>
+                        <item>
+                         <property name="text">
+                          <string>女</string>
+                         </property>
+                        </item>
+                       </widget>
+                      </item>
+                      <item row="3" column="8">
+                       <widget class="QLineEdit" name="dorm_lineEdit"/>
+                      </item>
+                      <item row="1" column="11">
+                       <widget class="QComboBox" name="grade_comboBox">
+                        <item>
+                         <property name="text">
+                          <string>大一</string>
+                         </property>
+                        </item>
+                        <item>
+                         <property name="text">
+                          <string>大二</string>
+                         </property>
+                        </item>
+                        <item>
+                         <property name="text">
+                          <string>大三</string>
+                         </property>
+                        </item>
+                       </widget>
+                      </item>
+                      <item row="0" column="9">
+                       <widget class="QLabel" name="group_label">
+                        <property name="text">
+                         <string>所属组别</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="3" column="1">
+                       <widget class="QLineEdit" name="class_lineEdit"/>
+                      </item>
+                      <item row="5" column="6">
+                       <widget class="QLabel" name="njh_total_times_label">
+                        <property name="text">
+                         <string>南鉴湖总次数</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="5" column="8">
+                       <widget class="QSpinBox" name="njh_total_times_spinBox">
                         <property name="focusPolicy">
-                         <enum>Qt::NoFocus</enum>
+                         <enum>Qt::FocusPolicy::NoFocus</enum>
+                        </property>
+                        <property name="readOnly">
+                         <bool>true</bool>
+                        </property>
+                        <property name="buttonSymbols">
+                         <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+                        </property>
+                        <property name="maximum">
+                         <number>1000</number>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="5" column="0">
+                       <widget class="QLabel" name="total_times_label">
+                        <property name="text">
+                         <string>总执勤次数</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="5" column="1">
+                       <widget class="QSpinBox" name="total_times_spinBox">
+                        <property name="focusPolicy">
+                         <enum>Qt::FocusPolicy::NoFocus</enum>
+                        </property>
+                        <property name="readOnly">
+                         <bool>true</bool>
+                        </property>
+                        <property name="buttonSymbols">
+                         <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
                         </property>
                         <property name="maximum">
                          <number>1000</number>
@@ -1440,7 +1440,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
              <x>0</x>
              <y>0</y>
              <width>818</width>
-             <height>520</height>
+             <height>570</height>
             </rect>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout">

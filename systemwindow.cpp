@@ -498,6 +498,28 @@ void SystemWindow::onExportButtonClicked()
     QString filePath = QFileDialog::getSaveFileName(this, "导出表格", "第X周升降旗.xlsx", "Excel 文件 (*.xlsx)");
     // 检查文件路径
     if (filePath.isEmpty()) return;
+    
+    // 检查文件是否已存在且可能被占用
+    QFileInfo fileInfo(filePath);
+    if (fileInfo.exists()) {
+        // 尝试打开文件检查是否被占用
+        QFile testFile(filePath);
+        if (!testFile.open(QIODevice::ReadWrite)) {
+            // 文件被占用，询问用户
+            QMessageBox::StandardButton reply = QMessageBox::question(
+                this,
+                "文件被占用",
+                QString("文件 \"%1\" 可能正在被其他程序使用（如Excel）。\n\n是否仍要尝试覆盖？\n（如果文件被占用，导出可能会失败）").arg(fileInfo.fileName()),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No
+            );
+            if (reply == QMessageBox::No) {
+                return; // 用户取消导出
+            }
+        } else {
+            testFile.close(); // 文件未被占用，可以继续
+        }
+    }
 
     // 确保进度对话框被正确初始化和重置
     if (exportProgress == nullptr) {
@@ -681,8 +703,27 @@ void SystemWindow::onExportButtonClicked()
             rows1To5->dynamicCall("RowHeight", 32.5);
             processStep("设置表格格式", exportProgress);
             // 保存并关闭 Excel 文件
+            // 如果目标文件已存在，先尝试删除（避免SaveAs时的覆盖提示卡死）
+            QFile targetFile(filePath);
+            if (targetFile.exists()) {
+                // 尝试删除旧文件，如果失败说明文件被占用
+                if (!targetFile.remove()) {
+                    qDebug() << "警告：无法删除旧文件，可能被占用：" << filePath;
+                    // 继续尝试SaveAs，Excel可能会提示覆盖
+                }
+            }
+            
             // 将工作簿保存到用户指定的路径
-            workbook->dynamicCall("SaveAs(const QString&)", QDir::toNativeSeparators(filePath));
+            // 使用DisplayAlerts=false来避免覆盖提示对话框导致卡死
+            excel->dynamicCall("SetDisplayAlerts(bool)", false);
+            QVariant saveResult = workbook->dynamicCall("SaveAs(const QString&)", QDir::toNativeSeparators(filePath));
+            excel->dynamicCall("SetDisplayAlerts(bool)", true);
+            
+            // 检查保存是否成功
+            if (saveResult.isNull() || !saveResult.toBool()) {
+                qDebug() << "Excel保存可能失败：" << filePath;
+            }
+            
             // 关闭工作簿
             workbook->dynamicCall("Close()");
             processStep("保存工作簿", exportProgress);
@@ -1177,6 +1218,15 @@ void SystemWindow::onImportTimeButtonClicked()
 
         file.close();
     } else if (suffix == "xlsx" || suffix == "xls") {
+        // 检查文件是否被占用
+        QFile testFile(filePath);
+        if (!testFile.open(QIODevice::ReadOnly)) {
+            QMessageBox::warning(this, "文件被占用", 
+                QString("文件 \"%1\" 可能正在被其他程序使用（如Excel）。\n\n请先关闭该文件，然后重试。").arg(QFileInfo(filePath).fileName()));
+            return;
+        }
+        testFile.close();
+        
         // 处理Excel文件 - 显示进度提示
         QProgressDialog *importProgress = new QProgressDialog(this);
         importProgress->setWindowModality(Qt::ApplicationModal);
@@ -1196,6 +1246,9 @@ void SystemWindow::onImportTimeButtonClicked()
             if (excel) delete excel;
             return;
         }
+        
+        // 设置Excel不显示警告对话框，避免卡死
+        excel->dynamicCall("SetDisplayAlerts(bool)", false);
 
         importProgress->setLabelText("正在连接Excel...");
         QApplication::processEvents();
@@ -1215,14 +1268,15 @@ void SystemWindow::onImportTimeButtonClicked()
             return;
         }
 
-        // 打开Excel文件
-        QVariant openResult = workbooks->dynamicCall("Open(const QString&)", QDir::toNativeSeparators(filePath));
+        // 打开Excel文件（ReadOnly模式，避免文件被占用）
+        QVariant openResult = workbooks->dynamicCall("Open(const QString&, bool)", QDir::toNativeSeparators(filePath), true);
         QAxObject *workbook = excel->querySubObject("ActiveWorkbook");
         if (!workbook || workbook->isNull()) {
             delete importProgress;
+            excel->dynamicCall("SetDisplayAlerts(bool)", true);
             excel->dynamicCall("Quit()");
             delete excel;
-            QMessageBox::warning(this, "错误", "无法打开Excel文件：" + filePath);
+            QMessageBox::warning(this, "错误", "无法打开Excel文件：" + filePath + "\n\n文件可能被其他程序占用，请先关闭该文件。");
             return;
         }
 
@@ -1339,6 +1393,7 @@ void SystemWindow::onImportTimeButtonClicked()
         delete worksheet;
         workbook->dynamicCall("Close(bool)", false); // 不保存更改
         delete workbook;
+        excel->dynamicCall("SetDisplayAlerts(bool)", true); // 恢复警告显示
         excel->dynamicCall("Quit()");
         delete excel;
         

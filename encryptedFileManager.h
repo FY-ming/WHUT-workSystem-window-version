@@ -42,9 +42,21 @@ private:
 public:
     // 加密保存文件
     static bool saveToFile(const Flag_group& flagGroup, const QString& filename, const QString& password = QString()) {
-        QFile file(filename);
-        if (!file.open(QIODevice::WriteOnly)) {
-            qDebug() << "无法打开文件进行写入：" << filename;
+        // 使用临时文件避免文件占用问题
+        QString tempFilename = filename + ".tmp";
+        
+        // 如果临时文件已存在，先删除
+        QFile tempFile(tempFilename);
+        if (tempFile.exists()) {
+            if (!tempFile.remove()) {
+                qDebug() << "无法删除旧的临时文件：" << tempFilename;
+                // 继续尝试，可能文件已被释放
+            }
+        }
+        
+        // 尝试打开临时文件进行写入
+        if (!tempFile.open(QIODevice::WriteOnly)) {
+            qDebug() << "无法打开临时文件进行写入：" << tempFilename;
             return false;
         }
         
@@ -97,12 +109,38 @@ public:
         QByteArray encryptedData = encryptData(data, key);
         
         // 写入文件：先写入文件头标识，再写入加密数据
-        QDataStream fileOut(&file);
+        QDataStream fileOut(&tempFile);
         fileOut.setVersion(QDataStream::Qt_5_15);
         fileOut << QString("FLAG_GROUP_ENCRYPTED_V1"); // 文件头标识
         fileOut << encryptedData;
         
-        file.close();
+        tempFile.close();
+        
+        // 检查数据流状态
+        if (fileOut.status() != QDataStream::Ok) {
+            qDebug() << "写入临时文件时发生错误：" << tempFilename;
+            tempFile.remove(); // 删除失败的临时文件
+            return false;
+        }
+        
+        // 如果目标文件已存在，先尝试删除（如果被占用，删除会失败）
+        QFile targetFile(filename);
+        if (targetFile.exists()) {
+            // 尝试删除旧文件，如果失败说明文件被占用
+            if (!targetFile.remove()) {
+                qDebug() << "警告：无法删除旧文件，可能被占用：" << filename;
+                // 继续尝试重命名，如果重命名也失败，说明文件确实被占用
+            }
+        }
+        
+        // 原子性地将临时文件重命名为目标文件
+        if (!tempFile.rename(filename)) {
+            qDebug() << "无法将临时文件重命名为目标文件：" << filename;
+            qDebug() << "临时文件位置：" << tempFilename;
+            // 保留临时文件，用户可以手动恢复
+            return false;
+        }
+        
         return true;
     }
     

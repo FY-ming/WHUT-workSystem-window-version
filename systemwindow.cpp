@@ -19,7 +19,6 @@
 #include "dataFunction.h"
 #include "encryptedFileManager.h"
 
-Flag_group backupGroup; // 全局变量,用于撤销操作
 QString finalText_excel; // 全局变量，用于导出表格时输出统计的表格信息
 
 SystemWindow::SystemWindow(QWidget *parent)
@@ -81,13 +80,13 @@ SystemWindow::SystemWindow(QWidget *parent)
     // 执勤管理界面
     // 连接按钮和复选框的信号与槽
     connect(ui->tabulateButton, &QPushButton::clicked, this, &SystemWindow::onTabulateButtonClicked); // 排表按钮点击事件
-    connect(ui->clearButton, &QPushButton::clicked, this, &SystemWindow::onClearButtonClicked); // 撤销操作按钮点击事件
+    connect(ui->clearButton, &QPushButton::clicked, this, &SystemWindow::onHistoryButtonClicked); // 查看历史记录按钮点击事件
     connect(ui->alterButton, &QPushButton::clicked, this, &SystemWindow::onResetButtonClicked); // 重置队员执勤总次数按钮点击事件
     connect(ui->deriveButton, &QPushButton::clicked, this, &SystemWindow::onExportButtonClicked); // 导出表格按钮点击事件
     connect(ui->importTimeFromTask_pushButton, &QPushButton::clicked, this, &SystemWindow::onImportTimeFromTaskButtonClicked); // 导入空闲时间按钮点击事件
-    // 导出表格、撤销操作在初始时取消交互
+    // 导出表格在初始时取消交互
     ui->deriveButton->setEnabled(false);
-    ui->clearButton->setEnabled(false);
+    // 历史记录按钮始终可用
     // 进度对话框指针
     exportProgress = nullptr;
     // 以常规模式为默认排表规则
@@ -312,15 +311,29 @@ void SystemWindow::onTabulateButtonClicked() {
 
     // 制表按钮
     if (!manager) {
-        backupGroup = flagGroup; // 保存当前状态
         manager = new SchedulingManager(flagGroup);
         connect(manager, &SchedulingManager::schedulingWarning, this, &SystemWindow::handleSchedulingWarning);  // 连接警告信号与发送警告信息的槽函数
         connect(manager, &SchedulingManager::schedulingFinished, this, [this]() {
             ui->tabulateButton->setEnabled(false);
             ui->deriveButton->setEnabled(true);
-            ui->clearButton->setEnabled(true);
             updateTableWidget(*manager); // 制表操作
             updateTextEdit(*manager); // 更新制表结果文本域
+            
+            // 保存历史记录
+            QString mode;
+            if (ui->normal_mode_radioButton->isChecked()) {
+                mode = "常规模式";
+            } else if (ui->supervisory_mode_radioButton->isChecked()) {
+                mode = "监督模式";
+            } else if (ui->DXY_only_twice_mode_radioButton->isChecked()) {
+                mode = "东西院仅两次模式";
+            } else if (ui->custom_mode_radioButton->isChecked()) {
+                mode = "自定义模式";
+            } else {
+                mode = "常规模式";
+            }
+            historyManager.addHistory(flagGroup, *manager, mode, finalText_excel);
+            
             delete manager;
             manager = nullptr;
         });
@@ -454,24 +467,73 @@ void SystemWindow::updateTextEdit(const SchedulingManager& manager) {
     // 清空警告信息，以便下次排表使用
     warningMessages.clear();
 }
-void SystemWindow::onClearButtonClicked() {
-    // 撤销操作按钮
-    if (backupGroup.isEmpty()) {
-        QMessageBox::information(this, "无操作可撤销", "当前无排表记录可撤销");
+void SystemWindow::onHistoryButtonClicked() {
+    // 查看历史记录按钮
+    HistoryDialog* dialog = new HistoryDialog(&historyManager, &flagGroup, this);
+    connect(dialog, &HistoryDialog::restoreHistoryRequested, this, &SystemWindow::restoreFromHistory);
+    dialog->exec();
+    delete dialog;
+}
+
+void SystemWindow::restoreFromHistory(int historyIndex) {
+    // 从历史记录恢复状态
+    const ScheduleHistoryItem* item = historyManager.getHistory(historyIndex);
+    if (!item) {
+        QMessageBox::warning(this, "错误", "无法获取历史记录信息。");
         return;
     }
-    // 恢复备份数据
-    flagGroup = backupGroup;
-
-    // 刷新表格和统计信息
-    ui->worksheet->clearContents();
-    ui->timesResult->clear();
-    QMessageBox::information(this, "撤销成功", "已恢复至上一次排表前状态");
-    ui->deriveButton->setEnabled(false);
-    ui->clearButton->setEnabled(false);
-    ui->tabulateButton->setEnabled(true);
-    // 撤销操作也会改变当前数据状态
+    
+    // 恢复队员信息
+    flagGroup = item->flagGroupSnapshot;
+    
+    // 恢复排班表（需要重新创建SchedulingManager并设置排班表）
+    // 先删除旧的manager，确保下次排班时能重新创建
+    if (manager) {
+        delete manager;
+        manager = nullptr;
+    }
+    
+    // 创建临时manager用于恢复排班表显示
+    SchedulingManager* tempManager = new SchedulingManager(flagGroup);
+    
+    // 根据历史记录中的排班表信息恢复排班状态
+    std::vector<std::vector<std::vector<Person*>>> scheduleTable;
+    scheduleTable.resize(item->scheduleTable.size());
+    for (size_t slot = 0; slot < item->scheduleTable.size(); ++slot) {
+        scheduleTable[slot].resize(item->scheduleTable[slot].size());
+        for (size_t location = 0; location < item->scheduleTable[slot].size(); ++location) {
+            scheduleTable[slot][location].resize(item->scheduleTable[slot][location].size());
+            for (size_t position = 0; position < item->scheduleTable[slot][location].size(); ++position) {
+                const SchedulePosition& pos = item->scheduleTable[slot][location][position];
+                Person* person = pos.findPerson(flagGroup);
+                scheduleTable[slot][location][position] = person;
+            }
+        }
+    }
+    tempManager->setScheduleTable(scheduleTable);
+    
+    // 使用临时manager更新UI
+    updateTableWidget(*tempManager);
+    
+    // 删除临时manager，确保下次排班时能重新创建
+    delete tempManager;
+    manager = nullptr;
+    ui->timesResult->setPlainText(item->scheduleText);
+    finalText_excel = item->scheduleText;
+    
+    // 更新按钮状态
+    ui->tabulateButton->setEnabled(false);
+    ui->deriveButton->setEnabled(true);
+    
+    // 刷新队员列表显示
+    for (int i = 1; i <= 4; ++i) {
+        updateListView(i);
+    }
+    
+    // 标记数据已更改
     markDataChanged();
+    
+    QMessageBox::information(this, "恢复成功", "已成功恢复到选中的历史记录状态。");
 }
 void SystemWindow::onResetButtonClicked() {
     //重置队员执勤次数按钮
@@ -732,26 +794,73 @@ void SystemWindow::onExportButtonClicked()
             excel->dynamicCall("SetDisplayAlerts(bool)", true);
             
             // 检查保存是否成功
+            bool saveSuccess = false;
             if (saveResult.isNull() || !saveResult.toBool()) {
                 qDebug() << "Excel保存可能失败：" << filePath;
+            } else {
+                // 验证文件是否真的存在
+                QFileInfo savedFile(filePath);
+                if (savedFile.exists() && savedFile.size() > 0) {
+                    saveSuccess = true;
+                }
             }
             
             // 关闭工作簿
             workbook->dynamicCall("Close()");
             processStep("保存工作簿", exportProgress);
+            
+            // 退出 Excel 应用程序
+            excel->dynamicCall("Quit()");
+            // 释放 Excel 应用程序对象的内存
+            delete excel;
+            
+            // 导出完成后恢复控件状态并提示
+            if (exportProgress) {
+                exportProgress->hide();
+            }
+            
+            // 只有在成功保存后才显示成功消息并恢复排班按钮
+            if (saveSuccess) {
+                QMessageBox::information(this, "导出完成", "表格已成功导出至：\n" + filePath, QMessageBox::Ok);
+                // 恢复排班按钮的交互功能，关闭导出按钮
+                ui->tabulateButton->setEnabled(true);
+                ui->deriveButton->setEnabled(false);
+            } else {
+                QMessageBox::warning(this, "导出失败", 
+                    "表格导出可能失败，请检查文件路径和权限。\n\n"
+                    "文件路径：" + filePath + "\n\n"
+                    "建议解决方案：\n"
+                    "1. 可以通过\"查看历史记录功能\"回退到之前的记录，然后重新导出\n"
+                    "2. 或者关闭程序后重新打开，重新进行排班和导出操作",
+                    QMessageBox::Ok);
+            }
+        } else {
+            // workbook创建失败
+            excel->dynamicCall("Quit()");
+            delete excel;
+            if (exportProgress) {
+                exportProgress->hide();
+            }
+            QMessageBox::warning(this, "导出失败", 
+                "无法创建工作簿，导出失败。\n\n"
+                "建议解决方案：\n"
+                "1. 可以通过\"查看历史记录功能\"回退到之前的记录，然后重新导出\n"
+                "2. 或者关闭程序后重新打开，重新进行排班和导出操作",
+                QMessageBox::Ok);
         }
-        // 退出 Excel 应用程序
-        excel->dynamicCall("Quit()");
-        // 释放 Excel 应用程序对象的内存
-        delete excel;
+    } else {
+        // Excel启动失败
+        if (exportProgress) {
+            exportProgress->hide();
+        }
+        QMessageBox::warning(this, "导出失败", 
+            "无法启动Excel应用程序，请确保已安装Microsoft Excel。\n\n"
+            "建议解决方案：\n"
+            "1. 安装或修复Microsoft Excel\n"
+            "2. 如果Excel已安装但仍无法启动，可以通过\"查看历史记录\"功能回退到之前的记录，然后重新导出\n"
+            "3. 或者关闭程序后重新打开，重新进行排班和导出操作",
+            QMessageBox::Ok);
     }
-
-
-    // 导出完成后恢复控件状态并提示
-    if (exportProgress) {
-        exportProgress->hide();
-    }
-    QMessageBox::information(this, "导出完成", "表格已成功导出至：\n" + filePath, QMessageBox::Ok);
 
 }
 // 自定义进度更新函数

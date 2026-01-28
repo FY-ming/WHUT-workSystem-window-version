@@ -106,7 +106,7 @@
                       </sizepolicy>
                      </property>
                      <property name="text">
-                      <string>撤销本次制表操作</string>
+                      <string>查看历史记录</string>
                      </property>
                     </widget>
                    </item>

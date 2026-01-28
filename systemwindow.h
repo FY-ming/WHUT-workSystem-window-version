@@ -9,6 +9,8 @@
 #include "qabstractbutton.h"
 #include <QFutureWatcher>
 #include <QProgressDialog>
+#include "scheduleHistory.h"
+#include "historyDialog.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -28,7 +30,7 @@ private slots:
     // 值周管理界面槽函数
     // 表格管理
     void onTabulateButtonClicked(); // 排表按钮点击事件
-    void onClearButtonClicked(); // 撤销操作按钮点击事件
+    void onHistoryButtonClicked(); // 查看历史记录按钮点击事件
     void onResetButtonClicked(); // 重置队员执勤总次数按钮点击事件
     void onExportButtonClicked(); // 导出表格按钮点击事件
     void onImportTimeFromTaskButtonClicked(); // 导入空闲时间按钮点击事件（表格管理界面）
@@ -70,8 +72,11 @@ private:
     QProgressDialog* exportProgress = nullptr; // 进度对话框
     QFutureWatcher<void> exportWatcher;
 
-    Flag_group backupGroup; // 全局变量,用于撤销操作
+    ScheduleHistoryManager historyManager; // 历史记录管理器
     QString finalText_excel; // 全局变量，用于导出表格时输出统计的表格信息
+    
+    // 历史记录相关函数
+    void restoreFromHistory(int historyIndex); // 从历史记录恢复状态
 
 
     // 值周管理操作函数

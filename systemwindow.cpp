@@ -456,8 +456,11 @@ void SystemWindow::updateTextEdit(const SchedulingManager& manager) {
     QString resultText;
     const auto& availableMembers = manager.getAvailableMembers();
     for (const auto& member : availableMembers) {
-        resultText += QString::fromStdString(member->getName()) + " 的工作次数: " + QString::number(member->getTimes()) +
-                      " 总工作次数: " + QString::number(member->getAll_times()) + "\n";
+        resultText += QString::fromStdString(member->getName()) +
+                      " 本周工作次数: " + QString::number(member->getTimes()) +
+                      " 总工作次数: " + QString::number(member->getAll_times()) +
+                      " （南鉴湖累计: " + QString::number(member->getNJHAllTimes()) +
+                      "，东西院累计: " + QString::number(member->getDXYAllTimes()) + "）\n";
     }
     // 拼接警告信息和排班结果文本
     QString finalText = warningMessages + resultText;
@@ -1099,6 +1102,8 @@ void SystemWindow::showMemberInfo(const Person &person)
     ui->grade_comboBox->setCurrentIndex(person.getGrade() - 1);//grade_combobox默认以0开始，与年级最小为1相违背
     ui->group_combobox->setCurrentIndex(person.getGroup() - 1);//group_combobox默认以0开始，与组名最小为1相违背
     ui->total_times_spinBox->setValue(person.getAll_times());
+    ui->njh_total_times_spinBox->setValue(person.getNJHAllTimes());
+    ui->dxy_total_times_spinBox->setValue(person.getDXYAllTimes());
 }
 void SystemWindow::updatePersonInfo(const Person &person)
 {

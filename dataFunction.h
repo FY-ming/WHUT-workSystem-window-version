@@ -102,6 +102,12 @@ public:
                         scheduleTable[slot][location][position] = selectedPerson;
                         selectedPerson->setTimes(selectedPerson->getTimes() + 1);
                         selectedPerson->setAll_times(selectedPerson->getAll_times() + 1);
+                        // 按地点累计长期执勤次数
+                        if (location == 0) {
+                            selectedPerson->setNJHAllTimes(selectedPerson->getNJHAllTimes() + 1);
+                        } else if (location == 1) {
+                            selectedPerson->setDXYAllTimes(selectedPerson->getDXYAllTimes() + 1);
+                        }
                     }
                 }
             }
@@ -223,14 +229,14 @@ private:
                 return nullptr;
             }
 
-            // 计算当前最小排班次数和最大排班次数
+            // 计算当前最小总执勤次数（all_times）
             int minTimes = INT_MAX;
             for (Person* p : allValidCandidates) {
                 int times = p->getAll_times();
                 if (times < minTimes) minTimes = times;
             }
 
-            // 筛选出排班次数等于minTimes的候选人
+            // 第一层：筛选出总执勤次数等于 minTimes 的候选人
             eligibleCandidates.clear();
             for (Person* p : allValidCandidates) {
                 if (p->getAll_times() == minTimes) {
@@ -243,11 +249,31 @@ private:
                 eligibleCandidates = allValidCandidates;
             }
 
+            // 第二层：在总次数相同的前提下，优先选择在当前地点累计次数更少的队员
+            int minLocationTimes = INT_MAX;
+            for (Person* p : eligibleCandidates) {
+                int locTimes = (location == 0) ? p->getNJHAllTimes() : p->getDXYAllTimes();
+                if (locTimes < minLocationTimes) {
+                    minLocationTimes = locTimes;
+                }
+            }
+
+            std::vector<Person*> balancedCandidates;
+            for (Person* p : eligibleCandidates) {
+                int locTimes = (location == 0) ? p->getNJHAllTimes() : p->getDXYAllTimes();
+                if (locTimes == minLocationTimes) {
+                    balancedCandidates.push_back(p);
+                }
+            }
+
+            // 如果基于地点次数筛选后还有候选人，则使用 balancedCandidates，否则退回 eligibleCandidates
+            const std::vector<Person*>& finalCandidates = balancedCandidates.empty() ? eligibleCandidates : balancedCandidates;
+
             // 在符合条件的候选人中随机选择
             std::random_device rd;
             std::mt19937 gen(rd());
-            std::uniform_int_distribution<> dis(0, eligibleCandidates.size() - 1);
-            return eligibleCandidates[dis(gen)];
+            std::uniform_int_distribution<> dis(0, finalCandidates.size() - 1);
+            return finalCandidates[dis(gen)];
         }
         return nullptr;
     }
@@ -271,6 +297,11 @@ private:
 
             // 基础条件：时间有空且未被安排
             if (!person->getTime(timeRow, day) || isPersonBusy(person, slot)) {
+                isValid = false;
+            }
+
+            // 本周执勤次数上限：一周最多执勤 4 次
+            if (isValid && person->getTimes() >= 4) {
                 isValid = false;
             }
 

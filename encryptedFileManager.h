@@ -70,7 +70,9 @@ public:
         out.setVersion(QDataStream::Qt_5_15);
         
         // 写入文件版本号（用于未来兼容性）
-        out << (qint32)1;
+        // 版本 1：仅保存总执勤次数 all_times
+        // 版本 2：新增按地点统计的累计执勤次数（南鉴湖 / 东西院）
+        out << (qint32)2;
         
         // 写入所有队员数据
         for (int i = 1; i <= 4; ++i) {
@@ -102,6 +104,8 @@ public:
                 // 写入执勤次数
                 out << (qint32)person.getTimes();
                 out << (qint32)person.getAll_times();
+                out << (qint32)person.getNJHAllTimes();
+                out << (qint32)person.getDXYAllTimes();
             }
         }
         
@@ -256,16 +260,20 @@ public:
                     }
                 }
                 
-                // 读取执勤次数
-                qint32 times, all_times;
+                // 读取执勤次数（兼容不同版本）
+                qint32 times = 0, all_times = 0;
+                qint32 njh_all_times = 0, dxy_all_times = 0;
                 in >> times >> all_times;
+                if (version >= 2) {
+                    in >> njh_all_times >> dxy_all_times;
+                }
                 
                 // 创建Person对象并添加到组
                 Person person(name.toStdString(), gender, group, grade,
                              phone_number.toStdString(), native_place.toStdString(),
                              native.toStdString(), dorm.toStdString(), school.toStdString(),
                              classname.toStdString(), birthday.toStdString(), isWork,
-                             time, times, all_times);
+                             time, times, all_times, njh_all_times, dxy_all_times);
                 flagGroup.addPersonToGroup(person, group);
             }
         }

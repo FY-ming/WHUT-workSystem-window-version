@@ -15,7 +15,7 @@ public:
            const string &phone_number, const string &native_place,
            const string &native, const string &dorm, const string &school,
            const string &classname, const string &birthday, bool isWork, bool (&time)[4][5],
-           int times, int all_times);
+           int times, int all_times, int njh_all_times = 0, int dxy_all_times = 0);
     // 重载赋值运算符
     // 对成员变量全部赋新值
     Person& operator=(const Person& other) {
@@ -39,6 +39,8 @@ public:
             }
             times = other.times; // 一次排班执勤次数，用于记录一周执勤该队员的执勤次数
             all_times = other.all_times; // 学期总执勤次数，用于采用总次数排班规则时使用
+            njh_all_times = other.njh_all_times; // 南鉴湖累计执勤次数
+            dxy_all_times = other.dxy_all_times; // 东西院累计执勤次数
         }
         return *this;
     }
@@ -47,7 +49,8 @@ public:
         return (name == other.name) && (group == other.group) && (grade == other.grade) && (gender == other.gender) && (phone_number == other.phone_number)
                && (native_place == other.native_place)&& (native == other.native)&& (dorm == other.dorm)
             && (school == other.school)&& (classname == other.classname)&& (birthday == other.birthday)&& (isWork == other.isWork)
-            && (times == other.times)&& (all_times == other.all_times);
+            && (times == other.times)&& (all_times == other.all_times)
+            && (njh_all_times == other.njh_all_times) && (dxy_all_times == other.dxy_all_times);
     }
     // 重载 != 运算符, ==运算符取反
     bool operator!=(const Person& other) const {
@@ -77,6 +80,12 @@ public:
     // 学期执勤次数
     int getAll_times() const;
     void setAll_times(int newAll_times);
+    // 南鉴湖累计执勤次数
+    int getNJHAllTimes() const;
+    void setNJHAllTimes(int value);
+    // 东西院累计执勤次数
+    int getDXYAllTimes() const;
+    void setDXYAllTimes(int value);
     // 电话
     string getPhone_number() const;
     void setPhone_number(const string &newPhone_number);
@@ -125,4 +134,6 @@ private:
     bool time[4][5]; // 队员执勤时间安排，对应20个任务时间点是否有时间。一周升降旗十次任务，一次任务两个校区：10*2=20。
     int times; // 一次排班执勤次数，用于记录一周执勤该队员的执勤次数
     int all_times; // 学期总执勤次数，用于采用总次数排班规则时使用
+    int njh_all_times; // 南鉴湖累计执勤次数
+    int dxy_all_times; // 东西院累计执勤次数
 };

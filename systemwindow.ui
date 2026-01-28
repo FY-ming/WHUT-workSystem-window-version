@@ -1011,6 +1011,52 @@ li.checked::marker { content: &quot;\2612&quot;; }
                         </property>
                        </widget>
                       </item>
+                      <item row="4" column="9">
+                       <widget class="QLabel" name="njh_total_times_label">
+                        <property name="text">
+                         <string>南鉴湖总次数</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="4" column="11">
+                       <widget class="QSpinBox" name="njh_total_times_spinBox">
+                        <property name="readOnly">
+                         <bool>true</bool>
+                        </property>
+                        <property name="buttonSymbols">
+                         <enum>QAbstractSpinBox::NoButtons</enum>
+                        </property>
+                        <property name="focusPolicy">
+                         <enum>Qt::NoFocus</enum>
+                        </property>
+                        <property name="maximum">
+                         <number>1000</number>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="5" column="9">
+                       <widget class="QLabel" name="dxy_total_times_label">
+                        <property name="text">
+                         <string>东西院总次数</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="5" column="11">
+                       <widget class="QSpinBox" name="dxy_total_times_spinBox">
+                        <property name="readOnly">
+                         <bool>true</bool>
+                        </property>
+                        <property name="buttonSymbols">
+                         <enum>QAbstractSpinBox::NoButtons</enum>
+                        </property>
+                        <property name="focusPolicy">
+                         <enum>Qt::NoFocus</enum>
+                        </property>
+                        <property name="maximum">
+                         <number>1000</number>
+                        </property>
+                       </widget>
+                      </item>
                      </layout>
                     </widget>
                    </item>

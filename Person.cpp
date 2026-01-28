@@ -74,6 +74,26 @@ void Person::setAll_times(int newAll_times)
     all_times = newAll_times;
 }
 
+int Person::getNJHAllTimes() const
+{
+    return njh_all_times;
+}
+
+void Person::setNJHAllTimes(int value)
+{
+    njh_all_times = value;
+}
+
+int Person::getDXYAllTimes() const
+{
+    return dxy_all_times;
+}
+
+void Person::setDXYAllTimes(int value)
+{
+    dxy_all_times = value;
+}
+
 string Person::getPhone_number() const
 {
     return phone_number;
@@ -165,7 +185,8 @@ void Person::setGrade(int newGrade)
 }
 // 无参构造函数
 Person::Person() : name(""), gender(false), group(0), grade(0), phone_number(""), native_place(""),
-    native(""), dorm(""), school(""), classname(""), birthday(""), isWork(true), times(0), all_times(0) {
+    native(""), dorm(""), school(""), classname(""), birthday(""), isWork(true),
+    times(0), all_times(0), njh_all_times(0), dxy_all_times(0) {
     for (int i = 0; i < 4; ++i) {
         for (int j = 0; j < 5; ++j) {
             time[i][j] = false;
@@ -173,7 +194,7 @@ Person::Person() : name(""), gender(false), group(0), grade(0), phone_number("")
     }
 }
 // 全参构造
-Person::Person(const string &name, bool gender, int group, int grade, const string &phone_number, const string &native_place, const string &native, const string &dorm, const string &school, const string &classname, const string &birthday, bool isWork, bool (&time)[4][5], int times, int all_times) : name(name),
+Person::Person(const string &name, bool gender, int group, int grade, const string &phone_number, const string &native_place, const string &native, const string &dorm, const string &school, const string &classname, const string &birthday, bool isWork, bool (&time)[4][5], int times, int all_times, int njh_all_times, int dxy_all_times) : name(name),
     gender(gender),
     group(group),
     grade(grade),
@@ -186,7 +207,9 @@ Person::Person(const string &name, bool gender, int group, int grade, const stri
     birthday(birthday),
     isWork(isWork),
     times(times),
-    all_times(all_times)
+    all_times(all_times),
+    njh_all_times(njh_all_times),
+    dxy_all_times(dxy_all_times)
 {
     for (int i = 0; i < 4; ++i) {
         for (int g = 0; g < 5; ++g) {

@@ -475,17 +475,29 @@ void SystemWindow::onClearButtonClicked() {
 }
 void SystemWindow::onResetButtonClicked() {
     //重置队员执勤次数按钮
-    for (int i = 1; i < 5; ++i) {
-        auto& allMembers = flagGroup.getGroupMembers(i);
-        for (auto& member : allMembers) {
-            member.setAll_times(0);
+    // 添加确认对话框，避免误触
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this,
+        "确认重置",
+        "确定要重置所有队员的执勤总次数吗？\n\n此操作会将所有队员的总执勤次数归零，且无法撤销。",
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No  // 默认选择"否"，更安全
+    );
+    
+    // 只有用户明确选择"是"才执行重置操作
+    if (reply == QMessageBox::Yes) {
+        for (int i = 1; i < 5; ++i) {
+            auto& allMembers = flagGroup.getGroupMembers(i);
+            for (auto& member : allMembers) {
+                member.setAll_times(0);
+            }
         }
+        // 在 QTextEdit 中清空并输出提示语句
+        ui->timesResult->clear();
+        ui->timesResult->append("所有队员的执勤总次数已成功归零");
+        // 重置总次数属于需要保存的更改
+        markDataChanged();
     }
-    // 在 QTextEdit 中清空并输出提示语句
-    ui->timesResult->clear();
-    ui->timesResult->append("所有队员的执勤总次数已成功归零");
-    // 重置总次数属于需要保存的更改
-    markDataChanged();
 }
 // 导出表格颜色转换辅助函数
 int rgbToBgr(const QColor& color) {

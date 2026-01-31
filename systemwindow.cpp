@@ -88,7 +88,7 @@ SystemWindow::SystemWindow(QWidget *parent)
     // 连接按钮和复选框的信号与槽
     connect(ui->tabulateButton, &QPushButton::clicked, this, &SystemWindow::onTabulateButtonClicked); // 排表按钮点击事件
     connect(ui->clearButton, &QPushButton::clicked, this, &SystemWindow::onHistoryButtonClicked); // 查看历史记录按钮点击事件
-    connect(ui->alterButton, &QPushButton::clicked, this, &SystemWindow::onResetButtonClicked); // 重置队员执勤总次数按钮点击事件
+    connect(ui->alterButton, &QPushButton::clicked, this, &SystemWindow::onRestoreScheduleButtonClicked); // 恢复排班按钮点击事件
     connect(ui->deriveButton, &QPushButton::clicked, this, &SystemWindow::onExportButtonClicked); // 导出表格按钮点击事件
     connect(ui->importTimeFromTask_pushButton, &QPushButton::clicked, this, &SystemWindow::onImportTimeFromTaskButtonClicked); // 导入空闲时间按钮点击事件
     // 导出表格在初始时取消交互
@@ -226,7 +226,6 @@ void SystemWindow::closeEvent(QCloseEvent *event)
     // 使用自定义中文按钮
     QPushButton *saveButton = msgBox.addButton("保存", QMessageBox::AcceptRole);
     QPushButton *discardButton = msgBox.addButton("不保存", QMessageBox::DestructiveRole);
-    QPushButton *cancelButton = msgBox.addButton("取消", QMessageBox::RejectRole);
     msgBox.setDefaultButton(saveButton);
 
     msgBox.exec();
@@ -552,31 +551,11 @@ void SystemWindow::restoreFromHistory(int historyIndex) {
     
     QMessageBox::information(this, "恢复成功", "已成功恢复到选中的历史记录状态。");
 }
-void SystemWindow::onResetButtonClicked() {
-    //重置队员执勤次数按钮
-    // 添加确认对话框，避免误触
-    QMessageBox::StandardButton reply = QMessageBox::question(
-        this,
-        "确认重置",
-        "确定要重置所有队员的执勤总次数吗？\n\n此操作会将所有队员的总执勤次数归零，且无法撤销。",
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No  // 默认选择"否"，更安全
-    );
-    
-    // 只有用户明确选择"是"才执行重置操作
-    if (reply == QMessageBox::Yes) {
-        for (int i = 1; i < 5; ++i) {
-            auto& allMembers = flagGroup.getGroupMembers(i);
-            for (auto& member : allMembers) {
-                member.setAll_times(0);
-            }
-        }
-        // 在 QTextEdit 中清空并输出提示语句
-        ui->timesResult->clear();
-        ui->timesResult->append("所有队员的执勤总次数已成功归零");
-        // 重置总次数属于需要保存的更改
-        markDataChanged();
-    }
+void SystemWindow::onRestoreScheduleButtonClicked() {
+    // 恢复排班按钮：重新启用排班、关闭导出，允许用户再次排班
+    ui->tabulateButton->setEnabled(true);
+    ui->deriveButton->setEnabled(false);
+    QMessageBox::information(this, "恢复排班", "已恢复排班功能，可以重新进行排班操作。");
 }
 // 导出表格颜色转换辅助函数
 int rgbToBgr(const QColor& color) {
@@ -893,6 +872,12 @@ void SystemWindow::processStep(const QString& stepName, QProgressDialog* progres
 void SystemWindow::onGroupAddButtonClicked(int groupIndex)
 {
     //添加队员按钮点击事件
+    // 检查组号是否有效
+    if (groupIndex < 1 || groupIndex > 4) {
+        QMessageBox::warning(this, "错误", "无效的组别");
+        return;
+    }
+    
     bool isChecked = false;
     //判断是哪个组发出的信号，修改新队员的是否值周状态
     switch (groupIndex) {
@@ -901,6 +886,7 @@ void SystemWindow::onGroupAddButtonClicked(int groupIndex)
     case 3: isChecked = ui->group3_iswork_radioButton->isChecked(); break;
     case 4: isChecked = ui->group4_iswork_radioButton->isChecked(); break;
     } 
+    
     bool time[4][5];
     //初始化所有执勤时间，默认为全部不可以执勤
     for (int i = 0; i < 4; ++i) {
@@ -909,37 +895,42 @@ void SystemWindow::onGroupAddButtonClicked(int groupIndex)
         }
     }
 
-    // 生成唯一的默认名字
+    // 生成唯一的默认名字（在当前组内唯一即可）
     std::string defaultNameBase = "未命名队员";
     int counter = 1;
     std::string defaultName = defaultNameBase + std::to_string(counter);
 
-    // 获取所有队员的名字
+    // 获取当前组的所有队员名字
+    const auto& members = flagGroup.getGroupMembers(groupIndex);
     std::vector<std::string> existingNames;
-    for (int i = 1; i <= 4; ++i) {
-        const auto& members = flagGroup.getGroupMembers(i);
-        for (const auto& member : members) {
-            existingNames.push_back(member.getName());
-        }
+    for (const auto& member : members) {
+        existingNames.push_back(member.getName());
     }
 
-    // 检查名字是否重复，若重复则递增计数器
+    // 检查名字是否在当前组内重复，若重复则递增计数器
     while (std::find(existingNames.begin(), existingNames.end(), defaultName) != existingNames.end()) {
         counter++;
         defaultName = defaultNameBase + std::to_string(counter);
     }
+    
     //初始化新队员的基础信息
     Person person(defaultName, false, groupIndex, 1, "", "", "", "", "", "", "", isChecked, time, 0, 0);
+    
     //向flagGroup中添加新队员
     flagGroup.addPersonToGroup(person, groupIndex);
+    
     //更新对应组的ListView组员标签信息
     updateListView(groupIndex);
+    
     // 数据已发生更改
     markDataChanged();
 }
 void SystemWindow::onGroupDeleteButtonClicked(int groupIndex)
 {
     //删除队员按钮点击事件
+    qDebug() << "\n========== [SystemWindow::onGroupDeleteButtonClicked] 删除队员操作开始 ==========";
+    qDebug() << "触发删除的组别:" << groupIndex;
+    
     QListView* listView = nullptr;
     //判断是哪个组发出的信号，以及信号情况
     switch (groupIndex) {
@@ -949,33 +940,110 @@ void SystemWindow::onGroupDeleteButtonClicked(int groupIndex)
     case 4: listView = ui->group4_info_listView; break;
     }
     //如果出现非法组号，退出
-    if (!listView) return;
+    if (!listView) {
+        qDebug() << "错误：listView为空";
+        return;
+    }
+    
+    // 检查是否有选择模型
+    if (!listView->selectionModel()) {
+        qDebug() << "错误：selectionModel为空";
+        return;
+    }
+    
     QModelIndexList selectedIndexes = listView->selectionModel()->selectedIndexes();
     //不存在被选定的队员
-    if (selectedIndexes.isEmpty()) return;
+    if (selectedIndexes.isEmpty()) {
+        qDebug() << "提示：未选择任何队员";
+        QMessageBox::information(this, "提示", "请先选择要删除的队员");
+        return;
+    }
+    
     //删除前的确认弹窗
     QMessageBox::StandardButton reply = QMessageBox::question(this, "确认删除", "是否删除该队员？", QMessageBox::Yes | QMessageBox::No);
     //删除对应队员
     if (reply == QMessageBox::Yes) {
+        qDebug() << "用户确认删除";
+        
         int row = selectedIndexes.first().row();
+        qDebug() << "选中的行索引:" << row;
+        
         const auto& members = flagGroup.getGroupMembers(groupIndex);
-        if (static_cast<std::vector<Person>::size_type>(row) < members.size()) {
-            const Person& personToRemove = members[row];
-            // 检查删除的是否是当前显示的队员
-            if (currentSelectedPerson && *currentSelectedPerson == personToRemove) {
-                clearMemberInfoDisplay(); // 清空信息显示区
-                currentSelectedPerson = nullptr; // 重置当前选中队员指针
-            }
-            flagGroup.removePersonFromGroup(personToRemove, groupIndex);// 调用 Flag_group 的删除成员方法
-            updateListView(groupIndex);//更新对应组的ListView组员标签信息
-            // 数据已发生更改
-            markDataChanged();
+        qDebug() << "组" << groupIndex << "当前队员数量:" << members.size();
+        
+        // 检查行索引是否有效
+        if (row < 0 || static_cast<std::vector<Person>::size_type>(row) >= members.size()) {
+            qDebug() << "错误：行索引无效";
+            QMessageBox::warning(this, "错误", "选择的队员索引无效");
+            return;
         }
+        
+        // 获取待删除队员的姓名（用于后续判断）
+        std::string personNameToDelete = members[row].getName();
+        int personGroupToDelete = members[row].getGroup();
+        qDebug() << "待删除队员姓名:" << QString::fromStdString(personNameToDelete);
+        qDebug() << "待删除队员的组别属性:" << personGroupToDelete;
+        
+        // 打印删除前所有组的队员情况
+        qDebug() << "\n--- 删除前各组队员情况 ---";
+        for (int i = 1; i <= 4; ++i) {
+            const auto& grp = flagGroup.getGroupMembers(i);
+            qDebug() << "组" << i << "队员数量:" << grp.size();
+            for (size_t j = 0; j < grp.size(); ++j) {
+                qDebug() << "  [" << j << "]" << QString::fromStdString(grp[j].getName()) 
+                         << "(组别属性:" << grp[j].getGroup() << ")";
+            }
+        }
+        
+        // 检查删除的是否是当前显示的队员（通过姓名和组别判断）
+        if (currentSelectedPerson && 
+            currentSelectedPerson->getName() == personNameToDelete && 
+            currentSelectedPerson->getGroup() == groupIndex) {
+            qDebug() << "删除的是当前显示的队员，清空信息显示区";
+            currentSelectedPerson = nullptr; // 先重置指针，防止意外操作
+            clearMemberInfoDisplay(); // 再清空信息显示区
+        }
+        
+        // 创建待删除队员的副本（只需要姓名即可定位）
+        Person personToRemove = members[row];
+        qDebug() << "创建待删除队员副本，姓名:" << QString::fromStdString(personToRemove.getName());
+        qDebug() << "副本的组别属性:" << personToRemove.getGroup();
+        
+        // 调用 Flag_group 的删除成员方法（在指定组内通过姓名删除）
+        qDebug() << "\n调用 flagGroup.removePersonFromGroup()...";
+        flagGroup.removePersonFromGroup(personToRemove, groupIndex);
+        
+        // 打印删除后所有组的队员情况
+        qDebug() << "\n--- 删除后各组队员情况 ---";
+        for (int i = 1; i <= 4; ++i) {
+            const auto& grp = flagGroup.getGroupMembers(i);
+            qDebug() << "组" << i << "队员数量:" << grp.size();
+            for (size_t j = 0; j < grp.size(); ++j) {
+                qDebug() << "  [" << j << "]" << QString::fromStdString(grp[j].getName()) 
+                         << "(组别属性:" << grp[j].getGroup() << ")";
+            }
+        }
+        
+        // 更新对应组的ListView组员标签信息
+        qDebug() << "\n更新组" << groupIndex << "的ListView...";
+        updateListView(groupIndex);
+        
+        // 数据已发生更改
+        markDataChanged();
+        
+        qDebug() << "========== 删除队员操作结束 ==========\n";
+    } else {
+        qDebug() << "用户取消删除";
     }
 }
 // 新增的清空信息显示区函数
 void SystemWindow::clearMemberInfoDisplay()
 {
+    qDebug() << "[SystemWindow::clearMemberInfoDisplay] 开始清空信息显示区";
+    
+    // 关键修复：在清空UI之前，先设置标志位，防止触发信号导致意外操作
+    isShowingInfo = true;
+    
     ui->name_lineEdit->clear();
     ui->phone_lineEdit->clear();
     ui->nativePlace_lineEdit->clear();
@@ -986,7 +1054,7 @@ void SystemWindow::clearMemberInfoDisplay()
     ui->birthday_lineEdit->clear();
     ui->gender_combobox->setCurrentIndex(0);
     ui->grade_comboBox->setCurrentIndex(0);
-    ui->group_combobox->setCurrentIndex(0);
+    ui->group_combobox->setCurrentIndex(0);  // 这行会触发 onGroupComboBoxChanged 信号！
     ui->total_times_spinBox->setValue(0);
 
     // 清空执勤时间按钮状态
@@ -996,6 +1064,11 @@ void SystemWindow::clearMemberInfoDisplay()
             button->setChecked(false);
         }
     }
+    
+    // 恢复标志位
+    isShowingInfo = false;
+    
+    qDebug() << "[SystemWindow::clearMemberInfoDisplay] 清空完成";
 }
 void SystemWindow::onGroupIsWorkRadioButtonClicked(int groupIndex)
 {
@@ -1042,43 +1115,108 @@ Person* SystemWindow::getSelectedPerson(int groupIndex, const QModelIndex &index
 void SystemWindow::onInfoLineEditChanged()
 {
     // 信息修改后更新 Flag_group 中队员的信息,不包括点击队员标签时显示队员信息时造成的修改
-    if (currentSelectedPerson && !isShowingInfo) {
-        updatePersonInfo(*currentSelectedPerson);
-        // 基础信息修改
-        markDataChanged();
+    if (!currentSelectedPerson || isShowingInfo) {
+        return;
     }
+    
+    // 检查当前选中的队员是否仍然存在于对应的组中
+    int groupIndex = currentSelectedPerson->getGroup();
+    Person* foundPerson = flagGroup.findPersonInGroup(*currentSelectedPerson, groupIndex);
+    
+    if (!foundPerson) {
+        // 队员已不存在，清空显示
+        currentSelectedPerson = nullptr;
+        clearMemberInfoDisplay();
+        QMessageBox::warning(this, "警告", "当前队员已被删除或移动，请重新选择");
+        return;
+    }
+    
+    updatePersonInfo(*currentSelectedPerson);
+    // 基础信息修改
+    markDataChanged();
 }
 void SystemWindow::onGroupComboBoxChanged(int newGroupIndex)
 {
     // 独立的修改组别函数
-    if (currentSelectedPerson && !isShowingInfo) {
-        int oldGroupIndex = currentSelectedPerson->getGroup();//值为1~4
-        if((oldGroupIndex - 1) != newGroupIndex)//规避并未修改组别引发多余操作
-        {
-            newGroupIndex += 1; // combobox 索引从 0 开始，组索引从 1 开始
-            currentSelectedPerson->setGroup(newGroupIndex);// 更新队员的组别信息
-            bool isChecked = false;
-            switch (newGroupIndex) {
-            case 1: isChecked = ui->group1_iswork_radioButton->isChecked(); break;
-            case 2: isChecked = ui->group2_iswork_radioButton->isChecked(); break;
-            case 3: isChecked = ui->group3_iswork_radioButton->isChecked(); break;
-            case 4: isChecked = ui->group4_iswork_radioButton->isChecked(); break;
-            }
-            currentSelectedPerson->setIsWork(isChecked);
-            flagGroup.addPersonToGroup(*currentSelectedPerson, newGroupIndex);// 将队员添加到新组中
-            updateListView(newGroupIndex);// 更新新组组别信息
-            Person* person = flagGroup.findPersonInGroup(*currentSelectedPerson, newGroupIndex);//创建一个新的队员指针跟踪新创建的队员
-            flagGroup.removePersonFromGroup(*currentSelectedPerson, oldGroupIndex);// 从旧组中删除队员
-            updateListView(oldGroupIndex);// 更新旧组组别信息
-            currentSelectedPerson = person;// 更新当前选中的队员指针
-            // 组别发生变化
-            markDataChanged();
+    if (!currentSelectedPerson || isShowingInfo) {
+        return;
+    }
+    
+    int oldGroupIndex = currentSelectedPerson->getGroup();//值为1~4
+    
+    // 规避并未修改组别引发多余操作
+    if((oldGroupIndex - 1) == newGroupIndex) {
+        return;
+    }
+    
+    newGroupIndex += 1; // combobox 索引从 0 开始，组索引从 1 开始
+    
+    // 检查新组号是否有效
+    if (newGroupIndex < 1 || newGroupIndex > 4) {
+        QMessageBox::warning(this, "错误", "无效的组别");
+        // 恢复原来的组别显示
+        ui->group_combobox->setCurrentIndex(oldGroupIndex - 1);
+        return;
+    }
+    
+    // 检查新组中是否已存在同名队员
+    const auto& newGroupMembers = flagGroup.getGroupMembers(newGroupIndex);
+    std::string currentName = currentSelectedPerson->getName();
+    for (const auto& member : newGroupMembers) {
+        if (member.getName() == currentName) {
+            QMessageBox::warning(this, "错误",
+                QString("目标组别中已存在名为\"%1\"的队员，无法切换组别。\n请先修改队员姓名或删除目标组中的同名队员。")
+                .arg(QString::fromStdString(currentName)));
+            // 恢复原来的组别显示
+            ui->group_combobox->setCurrentIndex(oldGroupIndex - 1);
+            return;
         }
     }
+    
+    // 创建当前队员的副本，避免指针失效
+    Person personCopy = *currentSelectedPerson;
+    
+    // 更新队员的组别信息
+    personCopy.setGroup(newGroupIndex);
+    
+    bool isChecked = false;
+    switch (newGroupIndex) {
+    case 1: isChecked = ui->group1_iswork_radioButton->isChecked(); break;
+    case 2: isChecked = ui->group2_iswork_radioButton->isChecked(); break;
+    case 3: isChecked = ui->group3_iswork_radioButton->isChecked(); break;
+    case 4: isChecked = ui->group4_iswork_radioButton->isChecked(); break;
+    }
+    personCopy.setIsWork(isChecked);
+    
+    // 先从旧组中删除队员（通过姓名在指定组内删除）
+    flagGroup.removePersonFromGroup(*currentSelectedPerson, oldGroupIndex);
+    
+    // 将队员添加到新组中（使用更新后的队员信息）
+    flagGroup.addPersonToGroup(personCopy, newGroupIndex);
+    
+    // 更新两个组的ListView显示
+    updateListView(oldGroupIndex);
+    updateListView(newGroupIndex);
+    
+    // 在新组中查找刚添加的队员，更新当前选中的队员指针
+    Person* person = flagGroup.findPersonInGroup(personCopy, newGroupIndex);
+    if (person) {
+        currentSelectedPerson = person;
+    } else {
+        // 如果找不到，清空当前选中
+        currentSelectedPerson = nullptr;
+        clearMemberInfoDisplay();
+        QMessageBox::warning(this, "警告", "组别切换后无法定位队员，请重新选择");
+    }
+    
+    // 组别发生变化
+    markDataChanged();
 }
 void SystemWindow::updateListView(int groupIndex)
 {
     // 更新队员标签界面
+    qDebug() << "[SystemWindow::updateListView] 更新组" << groupIndex << "的ListView";
+    
     QListView* listView = nullptr;
     switch (groupIndex) {
     case 1: listView = ui->group1_info_listView; break;
@@ -1086,12 +1224,21 @@ void SystemWindow::updateListView(int groupIndex)
     case 3: listView = ui->group3_info_listView; break;
     case 4: listView = ui->group4_info_listView; break;
     }
-    if (!listView) return;
+    if (!listView) {
+        qDebug() << "  错误：listView为空";
+        return;
+    }
+    
     const auto& members = flagGroup.getGroupMembers(groupIndex);
+    qDebug() << "  组" << groupIndex << "当前队员数量:" << members.size();
+    
     QStringList memberNames;
     for (const auto& member : members) {
-        memberNames << QString::fromStdString(member.getName());
+        QString name = QString::fromStdString(member.getName());
+        memberNames << name;
+        qDebug() << "    - " << name << "(组别属性:" << member.getGroup() << ")";
     }
+    
     // 使用 QStringListModel 替代 QStandardItemModel
     QStringListModel *model = new QStringListModel();//创建一个 QStringListModel 对象 model，它是 QAbstractItemModel 的子类，专门用于处理字符串列表数据
     model->setStringList(memberNames);//调用 model 的 setStringList 方法，将 memberNames 列表中的数据设置到模型中。
@@ -1100,6 +1247,8 @@ void SystemWindow::updateListView(int groupIndex)
     listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     // 可选：设置选择模式，允许点击选择
     listView->setSelectionMode(QAbstractItemView::SingleSelection);
+    
+    qDebug() << "  ListView更新完成";
 }
 void SystemWindow::showMemberInfo(const Person &person)
 {
@@ -1147,10 +1296,36 @@ void SystemWindow::updatePersonInfo(const Person &person)
                      nativePlace.toStdString(), native.toStdString(), dorm.toStdString(),
                      school.toStdString(), classname.toStdString(), birthday.toStdString(), person.getIsWork(),
                      time, person.getTimes(), all_times);
+    
+    // 如果修改了姓名，需要检查同组内是否有重名
+    if (name.toStdString() != person.getName()) {
+        const auto& members = flagGroup.getGroupMembers(person.getGroup());
+        for (const auto& member : members) {
+            // 跳过当前队员自己
+            if (member.getName() == person.getName()) {
+                continue;
+            }
+            // 检查是否与其他队员重名
+            if (member.getName() == name.toStdString()) {
+                QMessageBox::warning(nullptr, "错误", 
+                    QString("当前组别中已存在名为\"%1\"的队员，请使用其他姓名。").arg(name));
+                // 恢复原来的姓名
+                ui->name_lineEdit->setText(QString::fromStdString(person.getName()));
+                return;
+            }
+        }
+    }
+    
     // 更新 flagGroup 中对应队员的信息
     flagGroup.modifyPersonInGroup(person, newPerson, person.getGroup());
     // 更新对应组的 ListView 显示
     updateListView(person.getGroup());
+    
+    // 更新当前选中的队员指针（因为姓名可能已改变，需要重新查找）
+    Person* updatedPerson = flagGroup.findPersonInGroup(newPerson, person.getGroup());
+    if (updatedPerson) {
+        currentSelectedPerson = updatedPerson;
+    }
 
 }
 void SystemWindow::updateAttendanceButtons(const Person &person)
@@ -1191,40 +1366,54 @@ void SystemWindow::onAttendanceButtonClicked(QAbstractButton *button)
 {
     // 执勤按钮点击事件
     // 根据按钮修改time数组信息
-    Person* currentPerson = currentSelectedPerson;
-    if (currentPerson) {
-        // 定义按钮到 (row, column) 的映射,使用映射表来存储按钮和对应的 setTime 方法所需的行、列参数，这样可以避免大量重复的条件判断。
-        static QMap<QAbstractButton*, std::pair<int, int>> buttonToTimeMap = {
-            {ui->monday_up_NJH_pushButton, {1, 1}},
-            {ui->monday_up_DXY_pushButton, {2, 1}},
-            {ui->tuesday_up_NJH_pushButton, {1, 2}},
-            {ui->tuesday_up_DXY_pushButton, {2, 2}},
-            {ui->wednesday_up_NJH_pushButton, {1, 3}},
-            {ui->wednesday_up_DXY_pushButton, {2, 3}},
-            {ui->thursday_up_NJH_pushButton, {1, 4}},
-            {ui->thursday_up_DXY_pushButton, {2, 4}},
-            {ui->friday_up_NJH_pushButton, {1, 5}},
-            {ui->friday_up_DXY_pushButton, {2, 5}},
-            {ui->monday_down_NJH_pushButton, {3, 1}},
-            {ui->monday_down_DXY_pushButton, {4, 1}},
-            {ui->tuesday_down_NJH_pushButton, {3, 2}},
-            {ui->tuesday_down_DXY_pushButton, {4, 2}},
-            {ui->wednesday_down_NJH_pushButton, {3, 3}},
-            {ui->wednesday_down_DXY_pushButton, {4, 3}},
-            {ui->thursday_down_NJH_pushButton, {3, 4}},
-            {ui->thursday_down_DXY_pushButton, {4, 4}},
-            {ui->friday_down_NJH_pushButton, {3, 5}},
-            {ui->friday_down_DXY_pushButton, {4, 5}}
-        };
-        // 查找按钮对应的 (row, column)
-        auto it = buttonToTimeMap.find(button);
-        if (it != buttonToTimeMap.end()) {
-            int row = it.value().first;
-            int column = it.value().second;
-            currentPerson->setTime(row, column, button->isChecked());
-            // 出勤时间更改
-            markDataChanged();
-        }
+    if (!currentSelectedPerson || !button) {
+        return;
+    }
+    
+    // 检查当前选中的队员是否仍然存在
+    int groupIndex = currentSelectedPerson->getGroup();
+    Person* foundPerson = flagGroup.findPersonInGroup(*currentSelectedPerson, groupIndex);
+    
+    if (!foundPerson) {
+        // 队员已不存在，清空显示
+        currentSelectedPerson = nullptr;
+        clearMemberInfoDisplay();
+        QMessageBox::warning(this, "警告", "当前队员已被删除或移动，请重新选择");
+        return;
+    }
+    
+    // 定义按钮到 (row, column) 的映射,使用映射表来存储按钮和对应的 setTime 方法所需的行、列参数，这样可以避免大量重复的条件判断。
+    static QMap<QAbstractButton*, std::pair<int, int>> buttonToTimeMap = {
+        {ui->monday_up_NJH_pushButton, {1, 1}},
+        {ui->monday_up_DXY_pushButton, {2, 1}},
+        {ui->tuesday_up_NJH_pushButton, {1, 2}},
+        {ui->tuesday_up_DXY_pushButton, {2, 2}},
+        {ui->wednesday_up_NJH_pushButton, {1, 3}},
+        {ui->wednesday_up_DXY_pushButton, {2, 3}},
+        {ui->thursday_up_NJH_pushButton, {1, 4}},
+        {ui->thursday_up_DXY_pushButton, {2, 4}},
+        {ui->friday_up_NJH_pushButton, {1, 5}},
+        {ui->friday_up_DXY_pushButton, {2, 5}},
+        {ui->monday_down_NJH_pushButton, {3, 1}},
+        {ui->monday_down_DXY_pushButton, {4, 1}},
+        {ui->tuesday_down_NJH_pushButton, {3, 2}},
+        {ui->tuesday_down_DXY_pushButton, {4, 2}},
+        {ui->wednesday_down_NJH_pushButton, {3, 3}},
+        {ui->wednesday_down_DXY_pushButton, {4, 3}},
+        {ui->thursday_down_NJH_pushButton, {3, 4}},
+        {ui->thursday_down_DXY_pushButton, {4, 4}},
+        {ui->friday_down_NJH_pushButton, {3, 5}},
+        {ui->friday_down_DXY_pushButton, {4, 5}}
+    };
+    
+    // 查找按钮对应的 (row, column)
+    auto it = buttonToTimeMap.find(button);
+    if (it != buttonToTimeMap.end()) {
+        int row = it.value().first;
+        int column = it.value().second;
+        currentSelectedPerson->setTime(row, column, button->isChecked());
+        // 出勤时间更改
+        markDataChanged();
     }
 }
 void SystemWindow::onAllSelectButtonClicked()
@@ -1451,7 +1640,6 @@ void SystemWindow::onImportTimeButtonClicked()
         QAxObject *rows = usedRange->querySubObject("Rows");
         QAxObject *columns = usedRange->querySubObject("Columns");
         int rowCount = rows ? rows->property("Count").toInt() : 0;
-        int colCount = columns ? columns->property("Count").toInt() : 0;
 
         // 设置进度条范围（如果有数据行）
         if (rowCount > 1) {

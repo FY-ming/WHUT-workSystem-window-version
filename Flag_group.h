@@ -6,6 +6,8 @@
 #pragma once
 #include<iostream>
 #include<vector>
+#include<QString>
+#include<QDebug>
 #include"Person.h"
 using std::vector;
 using std::endl;

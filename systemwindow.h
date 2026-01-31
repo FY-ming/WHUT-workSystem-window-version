@@ -31,7 +31,7 @@ private slots:
     // 表格管理
     void onTabulateButtonClicked(); // 排表按钮点击事件
     void onHistoryButtonClicked(); // 查看历史记录按钮点击事件
-    void onResetButtonClicked(); // 重置队员执勤总次数按钮点击事件
+    void onRestoreScheduleButtonClicked(); // 恢复排班按钮点击事件
     void onExportButtonClicked(); // 导出表格按钮点击事件
     void onImportTimeFromTaskButtonClicked(); // 导入空闲时间按钮点击事件（表格管理界面）
 

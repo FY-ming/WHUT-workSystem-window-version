@@ -19,25 +19,25 @@
 // 排班表位置信息（保存Person的标识信息而非指针）
 struct SchedulePosition {
     QString personName;      // 队员姓名
-    bool personGender;       // 队员性别
-    QString personClass;     // 队员班级
+    int personGroup;         // 队员组别（用于精确定位）
     
-    SchedulePosition() : personGender(false) {}
+    SchedulePosition() : personGroup(0) {}
     SchedulePosition(const Person* person) {
         if (person) {
             personName = QString::fromStdString(person->getName());
-            personGender = person->getGender();
-            personClass = QString::fromStdString(person->getClassname());
+            personGroup = person->getGroup();
         }
     }
     
     // 根据标识信息查找Person（在flagGroup中）
+    // 使用姓名+组别查找（确保在指定组内唯一）
     Person* findPerson(Flag_group& flagGroup) const {
-        Person temp;
-        temp.setName(personName.toStdString());
-        temp.setGender(personGender);
-        temp.setClassname(personClass.toStdString());
-        return flagGroup.findPerson(temp);
+        if (personGroup >= 1 && personGroup <= 4 && !personName.isEmpty()) {
+            Person temp;
+            temp.setName(personName.toStdString());
+            return flagGroup.findPersonInGroup(temp, personGroup);
+        }
+        return nullptr;
     }
 };
 
@@ -93,6 +93,11 @@ private:
             qint32 n;
             in >> n;
             for (int i = 0; i < n; ++i) {
+                qint32 personId = 0;
+                // 版本2及以上支持ID（但版本3+已废弃，仅用于兼容读取）
+                if (version >= 2 && version < 3) {
+                    in >> personId;
+                }
                 QString name; bool gender; qint32 group, grade;
                 QString phone, native_place, native, dorm, school, classname, birthday;
                 bool isWork;
@@ -152,9 +157,27 @@ public:
                 for (int j = 0; j < d1; ++j) {
                     item.scheduleTable[i][j].resize(d2);
                     for (int t = 0; t < d2; ++t) {
-                        in >> item.scheduleTable[i][j][t].personName
-                           >> item.scheduleTable[i][j][t].personGender
-                           >> item.scheduleTable[i][j][t].personClass;
+                        if (version >= 2 && version < 3) {
+                            // 兼容旧版本：读取但忽略ID、性别、班级信息
+                            qint32 id;
+                            bool gender;
+                            QString className;
+                            in >> id;
+                            in >> item.scheduleTable[i][j][t].personName >> gender >> className;
+                            // 无法从旧数据恢复组别，设为0（后续查找时会失败，但不会崩溃）
+                            item.scheduleTable[i][j][t].personGroup = 0;
+                        } else if (version >= 3) {
+                            // 新版本：读取姓名和组别
+                            qint32 group;
+                            in >> item.scheduleTable[i][j][t].personName >> group;
+                            item.scheduleTable[i][j][t].personGroup = group;
+                        } else {
+                            // 版本1：只有姓名、性别、班级
+                            bool gender;
+                            QString className;
+                            in >> item.scheduleTable[i][j][t].personName >> gender >> className;
+                            item.scheduleTable[i][j][t].personGroup = 0;
+                        }
                     }
                 }
             }
@@ -180,7 +203,8 @@ public:
         }
         QDataStream out(&tmp);
         out.setVersion(QDataStream::Qt_5_15);
-        out << QString("SCHEDULE_HISTORY_V1") << static_cast<qint32>(1)
+        // 版本3：移除队员唯一ID，使用姓名+组别作为唯一标识
+        out << QString("SCHEDULE_HISTORY_V1") << static_cast<qint32>(3)
             << static_cast<qint32>(historyList.size());
         for (const auto& item : historyList) {
             out << item.timestamp << item.mode;
@@ -196,7 +220,7 @@ public:
             for (const auto& row : item.scheduleTable)
                 for (const auto& col : row)
                     for (const auto& pos : col)
-                        out << pos.personName << pos.personGender << pos.personClass;
+                        out << pos.personName << static_cast<qint32>(pos.personGroup);
             out << item.scheduleText << static_cast<qint32>(item.totalMembers)
                 << static_cast<qint32>(item.totalScheduleCount);
         }

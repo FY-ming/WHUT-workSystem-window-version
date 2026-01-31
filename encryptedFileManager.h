@@ -72,7 +72,9 @@ public:
         // 写入文件版本号（用于未来兼容性）
         // 版本 1：仅保存总执勤次数 all_times
         // 版本 2：新增按地点统计的累计执勤次数（南鉴湖 / 东西院）
-        out << (qint32)2;
+        // 版本 3：新增唯一ID字段，用于精确识别队员（已废弃）
+        // 版本 4：移除唯一ID，使用姓名+组别作为唯一标识
+        out << (qint32)4;
         
         // 写入所有队员数据
         for (int i = 1; i <= 4; ++i) {
@@ -239,6 +241,12 @@ public:
             in >> memberCount;
             
             for (int i = 0; i < memberCount; ++i) {
+                // 读取队员唯一ID（版本3，兼容旧版本，但不再使用）
+                qint32 personId = 0;
+                if (version >= 3 && version < 4) {
+                    in >> personId;
+                }
+                
                 // 读取队员基本信息
                 QString name;
                 bool gender;
@@ -274,6 +282,7 @@ public:
                              native.toStdString(), dorm.toStdString(), school.toStdString(),
                              classname.toStdString(), birthday.toStdString(), isWork,
                              time, times, all_times, njh_all_times, dxy_all_times);
+                
                 flagGroup.addPersonToGroup(person, group);
             }
         }

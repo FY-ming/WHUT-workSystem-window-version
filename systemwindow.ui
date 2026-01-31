@@ -119,7 +119,7 @@
                       </sizepolicy>
                      </property>
                      <property name="text">
-                      <string>重置队员总执勤数</string>
+                      <string>恢复排班</string>
                      </property>
                     </widget>
                    </item>
@@ -1463,7 +1463,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;       排班按钮就是制表操作，制表结束将会在右下文本框中展示制表信息，队员本周执勤次数、总次数，仅供排表人员人工调整时用作参考。如果有时间没有安排人选也会发送警告信息，目前程序会默认交接规则，即周一南鉴湖降旗与周二南鉴湖升旗至少有一名队员是重复的，旨在减少不必要的南鉴湖旗交接工作，当然，可能会因为队员时间安排或随机数的原因导致无法完成交接规则，此时也会放弃该规则并选择常规选人。同时，程序也会根据队员的总次数排表，让所有人的总执勤次数在宏观上基本一致。当然如果队员间的总次数相差过大（我也不知道怎么会有这种情况，可能有队员因身体原因无法执勤或者其他的理由），会导致一名队员可能出现一周5次以上的任务，我们此时完全可以人工调控，事后记得更正一下各个队员的总次数即可。&lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;       导出表格会导出一个excel表格文件，可能需要一些时间，记住保存的文件地址就行（可以建一个文件夹专门保存表格留作记录），可以修改文件名。&lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;       撤销主要是为了配合总次数统计制作的，撤销会取消本次排表的结果（功能具体包括清空表格以及撤销本次排表导致的队员总次数增加的操作）。&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;       清空次数便是字面意思，一般可以一个学期或者一个学年重置一次，看心情咯。&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;       恢复排班：在导出表格后，排班按钮会被禁用。若不需要导出而想重新排班，可点击「恢复排班」重新启用排班功能。&lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;       关于规则，常规模式就是提供一份保证了基本执勤工作正常进行的执勤表，遵循交接规则与总次数规则，同时规避三名女队员同时在一场任务的情况，尽量保证任务可以正常进行（主要是针对西院左护对身高的硬性要求问题）。监督规则主要是针对大一队员刚刚开始执行正式升降旗任务的前一个月（时间并不固定），需要由非大一队员带队确保任务顺利完成。东西院周一升周五降就是字面意思，临近期末可能会让东西院周一升周五降减少工作负担，留出时间复习备考。&lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;队员管理&lt;/span&gt;&lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;       &lt;/span&gt;队员管理负责管理、修改队员信息，包括基础信息以及执勤时间安排信息。&lt;/p&gt;

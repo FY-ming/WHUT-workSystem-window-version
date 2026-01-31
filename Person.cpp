@@ -194,7 +194,8 @@ Person::Person() : name(""), gender(false), group(0), grade(0), phone_number("")
     }
 }
 // 全参构造
-Person::Person(const string &name, bool gender, int group, int grade, const string &phone_number, const string &native_place, const string &native, const string &dorm, const string &school, const string &classname, const string &birthday, bool isWork, bool (&time)[4][5], int times, int all_times, int njh_all_times, int dxy_all_times) : name(name),
+Person::Person(const string &name, bool gender, int group, int grade, const string &phone_number, const string &native_place, const string &native, const string &dorm, const string &school, const string &classname, const string &birthday, bool isWork, bool (&time)[4][5], int times, int all_times, int njh_all_times, int dxy_all_times) :
+    name(name),
     gender(gender),
     group(group),
     grade(grade),

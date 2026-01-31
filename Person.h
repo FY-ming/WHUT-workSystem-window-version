@@ -16,6 +16,7 @@ public:
            const string &native, const string &dorm, const string &school,
            const string &classname, const string &birthday, bool isWork, bool (&time)[4][5],
            int times, int all_times, int njh_all_times = 0, int dxy_all_times = 0);
+    
     // 重载赋值运算符
     // 对成员变量全部赋新值
     Person& operator=(const Person& other) {
@@ -44,13 +45,9 @@ public:
         }
         return *this;
     }
-    // 重载 == 运算符，通过姓名和所属组别判定是否为同一人
+    // 重载 == 运算符，通过姓名判定是否为同一人
     bool operator==(const Person& other) const {
-        return (name == other.name) && (group == other.group) && (grade == other.grade) && (gender == other.gender) && (phone_number == other.phone_number)
-               && (native_place == other.native_place)&& (native == other.native)&& (dorm == other.dorm)
-            && (school == other.school)&& (classname == other.classname)&& (birthday == other.birthday)&& (isWork == other.isWork)
-            && (times == other.times)&& (all_times == other.all_times)
-            && (njh_all_times == other.njh_all_times) && (dxy_all_times == other.dxy_all_times);
+        return name == other.name;
     }
     // 重载 != 运算符, ==运算符取反
     bool operator!=(const Person& other) const {
@@ -118,8 +115,8 @@ private:
     // 队员基本信息
     string name; // 队员姓名
     bool gender; // 性别（0：男，1：女）
-    int group; // 所属组别（1~3）
-    int grade; // 所属年级（1~3）
+    int group; // 所属组别（1~4）
+    int grade; // 所属年级（1~4）
     string phone_number; // 电话号码
     string native_place; // 籍贯
     string native; // 民族

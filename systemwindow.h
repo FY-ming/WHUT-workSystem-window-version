@@ -70,7 +70,6 @@ private:
 
 
     QProgressDialog* exportProgress = nullptr; // 进度对话框
-    QFutureWatcher<void> exportWatcher;
 
     ScheduleHistoryManager historyManager; // 历史记录管理器
     QString finalText_excel; // 全局变量，用于导出表格时输出统计的表格信息

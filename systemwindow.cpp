@@ -14,6 +14,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QDebug>
+#include <QTimer>
 #include "systemwindow.h"
 #include "fileFunction.h"
 #include "dataFunction.h"
@@ -613,10 +614,10 @@ void SystemWindow::onExportButtonClicked()
     exportProgress->setRange(0, 0); // 不确定进度模式
     exportProgress->show();
 
-    // 强制更新UI，确保初始提示显示
-    QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
-    QApplication::processEvents(QEventLoop::ExcludeSocketNotifiers);
-    QApplication::processEvents(QEventLoop::WaitForMoreEvents, 100); // 强制显示100ms
+    // 强制更新UI，确保初始提示显示，增加事件处理次数
+    for (int i = 0; i < 5; ++i) {
+        QApplication::processEvents(QEventLoop::AllEvents);
+    }
 
     QAxObject *excel = new QAxObject("Excel.Application");
     if (excel) {
@@ -647,9 +648,11 @@ void SystemWindow::onExportButtonClicked()
                     delete font; // 释放对象，避免内存泄漏
                 }
                 // 处理事件，让进度对话框有机会更新
-                if (i % 10 == 0) { // 每10行处理一次事件
-                    QApplication::processEvents();
-                    if (exportProgress->wasCanceled()) { // 虽然移除了取消按钮，但仍可检查状态
+                if (i % 5 == 0) { // 每5行处理一次事件，增加频率
+                    for (int j = 0; j < 2; ++j) {
+                        QApplication::processEvents(QEventLoop::AllEvents);
+                    }
+                    if (exportProgress->wasCanceled()) {
                         break;
                     }
                 }
@@ -739,6 +742,10 @@ void SystemWindow::onExportButtonClicked()
                         QAxObject *cell = worksheetExcel->querySubObject("Cells(int,int)", row + 2, col + 3);
                         cell->dynamicCall("SetValue(const QVariant&)", item->text());
                     }
+                }
+                // 每行处理一次事件，让进度条更流畅
+                if (row % 1 == 0) {
+                    QApplication::processEvents(QEventLoop::AllEvents);
                 }
             }
             processStep("复制表格数据", exportProgress);
@@ -859,11 +866,14 @@ void SystemWindow::onExportButtonClicked()
     }
 
 }
-// 自定义进度更新函数
+// 自定义进度更新函数 - 优化版，增加更多事件处理
 void SystemWindow::processStep(const QString& stepName, QProgressDialog* progress) {
     if (progress && progress->isVisible()) {
         progress->setLabelText("正在导出表格 - " + stepName + "...");
-        QApplication::processEvents();
+        // 多次调用 processEvents，让进度条动画更流畅
+        for (int i = 0; i < 3; ++i) {
+            QApplication::processEvents(QEventLoop::AllEvents);
+        }
     }
 }
 

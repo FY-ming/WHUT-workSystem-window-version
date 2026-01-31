@@ -324,34 +324,38 @@ void SystemWindow::markDataChanged()
 void SystemWindow::onTabulateButtonClicked() {
 
     // 制表按钮
-    if (!manager) {
-        manager = new SchedulingManager(flagGroup);
-        connect(manager, &SchedulingManager::schedulingWarning, this, &SystemWindow::handleSchedulingWarning);  // 连接警告信号与发送警告信息的槽函数
-        connect(manager, &SchedulingManager::schedulingFinished, this, [this]() {
-            ui->tabulateButton->setEnabled(false);
-            ui->deriveButton->setEnabled(true);
-            updateTableWidget(*manager); // 制表操作
-            updateTextEdit(*manager); // 更新制表结果文本域
-            
-            // 保存历史记录
-            QString mode;
-            if (ui->normal_mode_radioButton->isChecked()) {
-                mode = "常规模式";
-            } else if (ui->supervisory_mode_radioButton->isChecked()) {
-                mode = "监督模式";
-            } else if (ui->DXY_only_twice_mode_radioButton->isChecked()) {
-                mode = "东西院仅两次模式";
-            } else if (ui->custom_mode_radioButton->isChecked()) {
-                mode = "自定义模式";
-            } else {
-                mode = "常规模式";
-            }
-            historyManager.addHistory(flagGroup, *manager, mode, finalText_excel);
-            
-            delete manager;
-            manager = nullptr;
-        });
+    // 关键修复：每次排表前都删除旧的 manager 并重新创建，确保 availableMembers 是最新的
+    if (manager) {
+        delete manager;
+        manager = nullptr;
     }
+    
+    manager = new SchedulingManager(flagGroup);
+    connect(manager, &SchedulingManager::schedulingWarning, this, &SystemWindow::handleSchedulingWarning);  // 连接警告信号与发送警告信息的槽函数
+    connect(manager, &SchedulingManager::schedulingFinished, this, [this]() {
+        ui->tabulateButton->setEnabled(false);
+        ui->deriveButton->setEnabled(true);
+        updateTableWidget(*manager); // 制表操作
+        updateTextEdit(*manager); // 更新制表结果文本域
+        
+        // 保存历史记录
+        QString mode;
+        if (ui->normal_mode_radioButton->isChecked()) {
+            mode = "常规模式";
+        } else if (ui->supervisory_mode_radioButton->isChecked()) {
+            mode = "监督模式";
+        } else if (ui->DXY_only_twice_mode_radioButton->isChecked()) {
+            mode = "东西院仅两次模式";
+        } else if (ui->custom_mode_radioButton->isChecked()) {
+            mode = "自定义模式";
+        } else {
+            mode = "常规模式";
+        }
+        historyManager.addHistory(flagGroup, *manager, mode, finalText_excel);
+        
+        delete manager;
+        manager = nullptr;
+    });
 
     // 在排表前直接检查单选按钮状态并设置模式
     if (ui->normal_mode_radioButton->isChecked()) {
@@ -367,8 +371,8 @@ void SystemWindow::onTabulateButtonClicked() {
         manager->setScheduleMode(SchedulingManager::ScheduleMode::Normal);
     }
     // 检查可用成员数量，不足则直接返回
-    if (manager->getAvailableMembers().size() < 6) {
-        QMessageBox::warning(nullptr,"排表错误警告","现在国旗班6个队员都凑不出来了吗:(");
+    if (manager->getAvailableMembers().size() < 12) {
+        QMessageBox::warning(nullptr,"排表错误警告","现在国旗班12个队员都凑不出来了吗:(");
     } else {
         manager->schedule();
         // 排表会修改队员总次数等信息，属于需要保存的更改

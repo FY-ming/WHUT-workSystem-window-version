@@ -300,8 +300,8 @@ private:
                 isValid = false;
             }
 
-            // 本周执勤次数上限：一周最多执勤 4 次
-            if (isValid && person->getTimes() >= 4) {
+            // 本周执勤次数上限：一周最多执勤 5 次
+            if (isValid && person->getTimes() >= 5) {
                 isValid = false;
             }
 

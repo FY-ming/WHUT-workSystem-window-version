@@ -2072,7 +2072,7 @@ void SystemWindow::showEasterEgg()
             
             // 使用加密保存
             if (EncryptedFileManager::saveEasterEgg(easterEggContent, encryptedFilename)) {
-                QMessageBox::information(easterEggDialog, "保存成功", "彩蛋内容已加密保存！");
+                QMessageBox::information(easterEggDialog, "保存成功", "彩蛋内容已保存！");
             } else {
                 QMessageBox::warning(easterEggDialog, "保存失败", "无法保存彩蛋内容到文件。");
             }

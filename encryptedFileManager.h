@@ -289,4 +289,103 @@ public:
         
         return true;
     }
+    
+    // 加密保存彩蛋内容
+    static bool saveEasterEgg(const QString& content, const QString& filename, const QString& password = QString()) {
+        QFile file(filename);
+        if (!file.open(QIODevice::WriteOnly)) {
+            qDebug() << "无法打开文件进行写入：" << filename;
+            return false;
+        }
+        
+        // 生成加密密钥
+        QString actualPassword = password.isEmpty() ? getDefaultKey() : password;
+        QByteArray key = generateKey(actualPassword);
+        
+        // 将内容转换为字节数组
+        QByteArray data = content.toUtf8();
+        
+        // 加密数据
+        QByteArray encryptedData = encryptData(data, key);
+        
+        // 写入文件：先写入文件头标识，再写入加密数据
+        QDataStream fileOut(&file);
+        fileOut.setVersion(QDataStream::Qt_5_15);
+        fileOut << QString("EASTER_EGG_ENCRYPTED_V1"); // 文件头标识
+        fileOut << encryptedData;
+        
+        file.close();
+        
+        if (fileOut.status() != QDataStream::Ok) {
+            qDebug() << "写入彩蛋文件时发生错误：" << filename;
+            return false;
+        }
+        
+        return true;
+    }
+    
+    // 解密读取彩蛋内容
+    static QString loadEasterEgg(const QString& filename, const QString& password = QString()) {
+        QFile file(filename);
+        if (!file.exists()) {
+            qDebug() << "彩蛋文件不存在：" << filename;
+            return QString();
+        }
+        
+        if (!file.open(QIODevice::ReadOnly)) {
+            qDebug() << "无法打开彩蛋文件进行读取：" << filename;
+            return QString();
+        }
+        
+        if (file.size() == 0) {
+            qDebug() << "彩蛋文件为空：" << filename;
+            file.close();
+            return QString();
+        }
+        
+        QDataStream fileIn(&file);
+        fileIn.setVersion(QDataStream::Qt_5_15);
+        
+        // 读取文件头标识
+        QString header;
+        fileIn >> header;
+        
+        if (fileIn.status() != QDataStream::Ok) {
+            qDebug() << "读取彩蛋文件头失败：" << filename;
+            file.close();
+            return QString();
+        }
+        
+        // 检查文件格式
+        if (header != "EASTER_EGG_ENCRYPTED_V1") {
+            qDebug() << "彩蛋文件格式不正确，期望：EASTER_EGG_ENCRYPTED_V1，实际：" << header;
+            file.close();
+            return QString();
+        }
+        
+        // 读取加密数据
+        QByteArray encryptedData;
+        fileIn >> encryptedData;
+        file.close();
+        
+        if (fileIn.status() != QDataStream::Ok || encryptedData.isEmpty()) {
+            qDebug() << "读取彩蛋加密数据失败或数据为空：" << filename;
+            return QString();
+        }
+        
+        // 生成解密密钥
+        QString actualPassword = password.isEmpty() ? getDefaultKey() : password;
+        QByteArray key = generateKey(actualPassword);
+        
+        // 解密数据
+        QByteArray data = decryptData(encryptedData, key);
+        
+        if (data.isEmpty()) {
+            qDebug() << "解密后彩蛋数据为空：" << filename;
+            return QString();
+        }
+        
+        // 转换为字符串
+        return QString::fromUtf8(data);
+    }
 };

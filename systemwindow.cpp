@@ -15,6 +15,15 @@
 #include <QDir>
 #include <QDebug>
 #include <QTimer>
+#include <QInputDialog>
+#include <QPushButton>
+#include <QVBoxLayout>
+#include <QKeyEvent>
+#include <QMouseEvent>
+#include <QDialog>
+#include <QTextEdit>
+#include <QLabel>
+#include <QEvent>
 #include "systemwindow.h"
 #include "fileFunction.h"
 #include "dataFunction.h"
@@ -173,6 +182,8 @@ SystemWindow::SystemWindow(QWidget *parent)
     connect(ui->gender_combobox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SystemWindow::onInfoLineEditChanged);
     connect(ui->grade_comboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SystemWindow::onInfoLineEditChanged);
     connect(ui->total_times_spinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &SystemWindow::onInfoLineEditChanged);
+    connect(ui->njh_total_times_spinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &SystemWindow::onInfoLineEditChanged);
+    connect(ui->dxy_total_times_spinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &SystemWindow::onInfoLineEditChanged);
 
     // 连接出勤安排按钮的信号与槽
     connect(ui->monday_up_NJH_pushButton, &QPushButton::clicked, this, [this](bool) {onAttendanceButtonClicked(ui->monday_up_NJH_pushButton);});
@@ -202,6 +213,22 @@ SystemWindow::SystemWindow(QWidget *parent)
     
     // 连接应用程序退出信号，确保在任何情况下都能保存数据
     connect(qApp, &QApplication::aboutToQuit, this, &SystemWindow::onApplicationAboutToQuit);
+    
+    // 初始化管理员权限状态（默认为普通模式）
+    // 使用快捷键 Ctrl+Shift+A 触发管理员登录（隐蔽方式）
+    isAdminMode = false;
+    updateAdminButtonsState();
+    
+    // 初始化彩蛋相关
+    clickTimer = new QTimer(this);
+    clickTimer->setSingleShot(true);
+    connect(clickTimer, &QTimer::timeout, this, [this]() {
+        instructionTabClickCount = 0; // 超时后重置计数
+    });
+    
+    // 为使用说明文本框安装事件过滤器，用于检测双击
+    ui->instructionText->installEventFilter(this);
+    ui->instructionText->viewport()->installEventFilter(this);
 }
 SystemWindow::~SystemWindow()
 {
@@ -261,6 +288,21 @@ void SystemWindow::closeEvent(QCloseEvent *event)
         // 取消关闭或点击关闭按钮
         event->ignore();
     }
+}
+
+// 重写键盘事件，用于快捷键触发管理员登录
+void SystemWindow::keyPressEvent(QKeyEvent *event)
+{
+    // 检测 Ctrl+Shift+A 组合键
+    if (event->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier) && 
+        event->key() == Qt::Key_A) {
+        onAdminLoginClicked();
+        event->accept();
+        return;
+    }
+    
+    // 其他按键事件交给父类处理
+    QMainWindow::keyPressEvent(event);
 }
 
 // 保存数据到文件
@@ -1297,7 +1339,9 @@ void SystemWindow::updatePersonInfo(const Person &person)
     bool gender = ui->gender_combobox->currentText() == "女";
     int grade = ui->grade_comboBox->currentIndex() + 1;
     // 总执勤次数不允许在“队员管理”界面手动修改，始终以当前队员数据为准
-    int all_times = person.getAll_times();
+    int all_times = ui->total_times_spinBox->value();
+    int njh_all_times = ui->njh_total_times_spinBox->value();
+    int dxy_all_times = ui->dxy_total_times_spinBox->value();
     // 创建新的 Person 对象
     bool time[4][5];
     //time 数组保持不变
@@ -1309,7 +1353,7 @@ void SystemWindow::updatePersonInfo(const Person &person)
     Person newPerson(name.toStdString(), gender, person.getGroup(), grade, phone.toStdString(),
                      nativePlace.toStdString(), native.toStdString(), dorm.toStdString(),
                      school.toStdString(), classname.toStdString(), birthday.toStdString(), person.getIsWork(),
-                     time, person.getTimes(), all_times);
+                     time, person.getTimes(), all_times, njh_all_times, dxy_all_times);
     
     // 如果修改了姓名，需要检查同组内是否有重名
     if (name.toStdString() != person.getName()) {
@@ -1819,4 +1863,243 @@ void SystemWindow::onImportTimeFromTaskButtonClicked()
 {
     // 直接调用导入空闲时间函数
     onImportTimeButtonClicked();
+}
+
+// 管理员权限相关函数实现
+void SystemWindow::onAdminLoginClicked()
+{
+    // 如果已经是管理员模式，则退出管理员模式
+    if (isAdminMode) {
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this,
+            "退出管理员模式",
+            "确定要退出管理员模式吗？",
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No
+        );
+        
+        if (reply == QMessageBox::Yes) {
+            setAdminMode(false);
+            QMessageBox::information(this, "提示", "已退出管理员模式");
+        }
+        return;
+    }
+    
+    // 弹出密码输入对话框（中文提示）
+    bool ok;
+    QInputDialog inputDialog(this);
+    inputDialog.setWindowTitle("管理员登录");
+    inputDialog.setLabelText("请输入管理员密码：");
+    inputDialog.setTextEchoMode(QLineEdit::Password);
+    inputDialog.setOkButtonText("确定");
+    inputDialog.setCancelButtonText("取消");
+    
+    ok = inputDialog.exec();
+    QString password = inputDialog.textValue();
+    
+    if (ok) {
+        if (password == adminPassword) {
+            setAdminMode(true);
+            QMessageBox::information(this, "登录成功", "已进入管理员模式");
+        } else {
+            QMessageBox::warning(this, "登录失败", "密码错误，请重试");
+        }
+    }
+}
+
+void SystemWindow::setAdminMode(bool isAdmin)
+{
+    isAdminMode = isAdmin;
+    updateAdminButtonsState();
+}
+
+void SystemWindow::updateAdminButtonsState()
+{
+    // 值周管理界面：恢复排班按钮、查看历史记录按钮
+    ui->alterButton->setEnabled(isAdminMode);
+    ui->clearButton->setEnabled(isAdminMode);
+    
+    // 队员管理界面：三个次数统计 SpinBox
+    // 设置启用/禁用状态
+    ui->total_times_spinBox->setEnabled(isAdminMode);
+    ui->njh_total_times_spinBox->setEnabled(isAdminMode);
+    ui->dxy_total_times_spinBox->setEnabled(isAdminMode);
+    
+    // 设置只读状态（管理员模式下可编辑）
+    ui->total_times_spinBox->setReadOnly(!isAdminMode);
+    ui->njh_total_times_spinBox->setReadOnly(!isAdminMode);
+    ui->dxy_total_times_spinBox->setReadOnly(!isAdminMode);
+    
+    // 设置按钮符号（管理员模式下显示上下箭头）
+    if (isAdminMode) {
+        ui->total_times_spinBox->setButtonSymbols(QAbstractSpinBox::UpDownArrows);
+        ui->njh_total_times_spinBox->setButtonSymbols(QAbstractSpinBox::UpDownArrows);
+        ui->dxy_total_times_spinBox->setButtonSymbols(QAbstractSpinBox::UpDownArrows);
+        
+        // 设置焦点策略（管理员模式下可以获得焦点）
+        ui->total_times_spinBox->setFocusPolicy(Qt::StrongFocus);
+        ui->njh_total_times_spinBox->setFocusPolicy(Qt::StrongFocus);
+        ui->dxy_total_times_spinBox->setFocusPolicy(Qt::StrongFocus);
+    } else {
+        ui->total_times_spinBox->setButtonSymbols(QAbstractSpinBox::NoButtons);
+        ui->njh_total_times_spinBox->setButtonSymbols(QAbstractSpinBox::NoButtons);
+        ui->dxy_total_times_spinBox->setButtonSymbols(QAbstractSpinBox::NoButtons);
+        
+        // 普通模式下不可获得焦点
+        ui->total_times_spinBox->setFocusPolicy(Qt::NoFocus);
+        ui->njh_total_times_spinBox->setFocusPolicy(Qt::NoFocus);
+        ui->dxy_total_times_spinBox->setFocusPolicy(Qt::NoFocus);
+    }
+}
+
+// 事件过滤器，用于检测使用说明文本框的双击事件
+bool SystemWindow::eventFilter(QObject *obj, QEvent *event)
+{
+    // 检查是否是使用说明文本框或其视口的双击事件
+    if ((obj == ui->instructionText || obj == ui->instructionText->viewport()) && 
+        event->type() == QEvent::MouseButtonDblClick) {
+        
+        // 检查当前是否在使用说明标签页
+        if (ui->worksheet_tabWidget->currentIndex() == 2) { // 使用说明是第3个标签页，索引为2
+            onInstructionTabDoubleClicked();
+            return true; // 事件已处理
+        }
+    }
+    
+    // 其他事件交给父类处理
+    return QMainWindow::eventFilter(obj, event);
+}
+
+// 使用说明标签页双击事件处理
+void SystemWindow::onInstructionTabDoubleClicked()
+{
+    instructionTabClickCount++;
+    
+    // 启动或重启计时器（1000ms内的点击才算连续）
+    clickTimer->start(1000);
+    
+    // 连续双击5次触发彩蛋
+    if (instructionTabClickCount >= 5) {
+        instructionTabClickCount = 0;
+        clickTimer->stop();
+        showEasterEgg();
+    }
+}
+
+// 彩蛋窗口
+void SystemWindow::showEasterEgg()
+{
+    // 创建彩蛋对话框
+    QDialog *easterEggDialog = new QDialog(this);
+    easterEggDialog->setWindowTitle("🎉 彩蛋");
+    easterEggDialog->setMinimumSize(600, 400);
+    easterEggDialog->setModal(true);
+    
+    // 创建布局
+    QVBoxLayout *layout = new QVBoxLayout(easterEggDialog);
+    
+    // 添加标题标签
+    QLabel *titleLabel = new QLabel("🎊 恭喜你发现了隐藏彩蛋！ 🎊", easterEggDialog);
+    titleLabel->setAlignment(Qt::AlignCenter);
+    QFont titleFont = titleLabel->font();
+    titleFont.setPointSize(16);
+    titleFont.setBold(true);
+    titleLabel->setFont(titleFont);
+    layout->addWidget(titleLabel);
+    
+    // 添加说明标签
+    QString infoText = isAdminMode ? "你可以在下方编辑彩蛋内容：" : "彩蛋内容（只读模式，需要管理员权限才能编辑）：";
+    QLabel *infoLabel = new QLabel(infoText, easterEggDialog);
+    infoLabel->setAlignment(Qt::AlignLeft);
+    layout->addWidget(infoLabel);
+    
+    // 添加文本编辑框
+    QTextEdit *textEdit = new QTextEdit(easterEggDialog);
+    textEdit->setPlaceholderText("在这里输入你想要的彩蛋内容...\n\n可以写一些有趣的话、祝福语、或者任何你想说的话！");
+    
+    // 根据管理员模式设置是否可编辑
+    textEdit->setReadOnly(!isAdminMode);
+    
+    // 设置默认彩蛋内容
+    QString defaultEasterEggText = 
+        "🎉 恭喜你发现了这个隐藏彩蛋！ 🎉\n\n"
+        "═══════════════════════════════════════\n\n"
+        "感谢你使用 WHUT国仪执勤管理系统！\n\n"
+        "这个系统是为了让排班工作更加轻松高效而开发的。\n"
+        "希望它能为你的工作带来便利！\n\n"
+        "═══════════════════════════════════════\n\n"
+        "💡 小提示：\n"
+        "- 快捷键 Ctrl+Shift+A 可以进入管理员模式\n"
+        "- 记得定期备份 data 文件夹哦\n"
+        "- 有任何问题欢迎联系开发者\n\n"
+        "═══════════════════════════════════════\n\n"
+        "开发者的话：\n\n"
+        "本来最初想在这个程序里设置点彩蛋，想了想，还是算了，\n"
+        "毕竟也不一定会真正用这个东西排表，而且要是真用了，\n"
+        "自己留个彩蛋还怪不好意思的。\n\n"
+        "但是现在，既然你发现了这个彩蛋，那就说明你真的在\n"
+        "认真使用这个系统！这让我感到非常开心和欣慰！\n\n"
+        "感谢你的使用！\n\n"
+        "═══════════════════════════════════════\n\n"
+        "版本：v1.2.2\n"
+        "开发者：万明\n"
+        "日期：2026年2月\n\n"
+        "🌟 祝你工作顺利，生活愉快！ 🌟";
+    
+    textEdit->setPlainText(defaultEasterEggText);
+    layout->addWidget(textEdit);
+    
+    // 添加按钮
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    
+    // 只有管理员模式才创建和显示保存按钮
+    if (isAdminMode) {
+        QPushButton *saveButton = new QPushButton("保存修改", easterEggDialog);
+        buttonLayout->addWidget(saveButton);
+        
+        // 连接保存按钮信号
+        connect(saveButton, &QPushButton::clicked, [textEdit, easterEggDialog, this]() {
+            // 保存彩蛋内容到加密文件
+            QString easterEggContent = textEdit->toPlainText();
+            QString encryptedFilename = "./data/easter_egg.dat";
+            
+            // 确保data目录存在
+            QFileInfo fileInfo(encryptedFilename);
+            QDir dir = fileInfo.absoluteDir();
+            if (!dir.exists()) {
+                dir.mkpath(".");
+            }
+            
+            // 使用加密保存
+            if (EncryptedFileManager::saveEasterEgg(easterEggContent, encryptedFilename)) {
+                QMessageBox::information(easterEggDialog, "保存成功", "彩蛋内容已加密保存！");
+            } else {
+                QMessageBox::warning(easterEggDialog, "保存失败", "无法保存彩蛋内容到文件。");
+            }
+        });
+    }
+    
+    buttonLayout->addStretch();
+    
+    QPushButton *closeButton = new QPushButton("关闭", easterEggDialog);
+    buttonLayout->addWidget(closeButton);
+    
+    layout->addLayout(buttonLayout);
+    
+    // 连接关闭按钮信号
+    connect(closeButton, &QPushButton::clicked, easterEggDialog, &QDialog::accept);
+    
+    // 尝试从加密文件加载彩蛋内容
+    QString encryptedFilename = "./data/easter_egg.dat";
+    QFile file(encryptedFilename);
+    if (file.exists()) {
+        QString savedContent = EncryptedFileManager::loadEasterEgg(encryptedFilename);
+        if (!savedContent.isEmpty()) {
+            textEdit->setPlainText(savedContent);
+        }
+    }
+    
+    // 显示对话框
+    easterEggDialog->exec();
+    delete easterEggDialog;
 }

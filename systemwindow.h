@@ -26,6 +26,8 @@ public:
     ~SystemWindow();
 protected:
     void closeEvent(QCloseEvent *event) override; // 重写 closeEvent 函数，自定义窗口关闭事件
+    void keyPressEvent(QKeyEvent *event) override; // 重写键盘事件，用于快捷键触发管理员登录
+    bool eventFilter(QObject *obj, QEvent *event) override; // 事件过滤器，用于检测双击事件
 private slots:
     // 值周管理界面槽函数
     // 表格管理
@@ -55,6 +57,13 @@ private slots:
     void onImportTimeButtonClicked(); // 导入空闲时间按钮点击事件
     void onSetAllAvailableButtonClicked(); // 全部可用按钮点击事件
     void onSetAllUnavailableButtonClicked(); // 全部不可用按钮点击事件
+    
+    // 管理员权限相关槽函数
+    void onAdminLoginClicked(); // 管理员登录按钮点击事件
+    
+    // 彩蛋相关槽函数
+    void showEasterEgg(); // 显示彩蛋窗口
+    void onInstructionTabDoubleClicked(); // 使用说明标签页双击事件
 
 private:
     Ui::SystemWindow *ui; // ui界面指针
@@ -66,8 +75,15 @@ private:
     QString filename = "./data/data.txt"; // 保存队员信息的文件名
     bool dataSaved = false; // 标记当前数据是否已保存到文件
     bool hasUnsavedChanges = false; // 标记是否存在未保存的修改
-    bool discardWithoutSave = false; // 标记用户是否选择“不保存直接退出”
-
+    bool discardWithoutSave = false; // 标记用户是否选择"不保存直接退出"
+    
+    // 管理员权限相关
+    bool isAdminMode = false; // 标记当前是否为管理员模式
+    QString adminPassword = "WHUT1993"; // 管理员密码（可以根据需要修改）
+    
+    // 彩蛋相关
+    int instructionTabClickCount = 0; // 使用说明标签页点击计数
+    QTimer* clickTimer = nullptr; // 点击计时器
 
     QProgressDialog* exportProgress = nullptr; // 进度对话框
 
@@ -91,5 +107,9 @@ private:
     bool saveDataToFile(); // 保存数据到文件
     void onApplicationAboutToQuit(); // 应用程序即将退出时的处理
     void markDataChanged(); // 标记数据已被修改
+    
+    // 管理员权限相关函数
+    void setAdminMode(bool isAdmin); // 设置管理员模式
+    void updateAdminButtonsState(); // 更新需要管理员权限的按钮状态
 };
 #endif // SYSTEMWINDOW_H
